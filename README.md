@@ -8,7 +8,7 @@ Requisitos: Node.js 20+, Docker e npm.
 
 ```powershell
 Copy-Item .env.example .env
-docker compose up -d postgres redis
+docker compose up -d
 npm install
 npm run db:migrate
 npm run db:seed
@@ -16,6 +16,8 @@ npm run dev
 ```
 
 A SPA roda em `http://localhost:5173`; a API, em `http://localhost:3000`. `setup.ps1` e `setup.sh` automatizam esses passos. Para CI: `npm run typecheck`, `npm test` e `npm run build`.
+
+O serviço `api` do Compose executa `prisma migrate deploy` antes de iniciar o backend. Em desenvolvimento local, `npm run db:migrate` continua disponível para aplicar migrations explicitamente.
 
 ## Meta Cloud API
 
