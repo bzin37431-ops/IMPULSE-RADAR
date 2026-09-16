@@ -1,0 +1,5 @@
+export type Lead = { id:string; name:string; company?:string; phone?:string; normalizedPhone?:string; city?:string; state?:string; niche?:string; status:string; consentStatus:string; instagram?:string; site?:string; observations?:string; nextFollowUpAt?:string; lastContactAt?:string; siteModelSent?:string; proposedValue?:number; proposalDate?:string; assignedUserId?:string; updatedAt?:string };
+export type Message = { id:string; conversationId:string; direction:'INBOUND'|'OUTBOUND'; type:string; content:string; status:string; createdAt:string; templateName?:string; providerMessageId?:string };
+export type Conversation = { id:string; lead:Lead; lastMessage?:Message };
+export type Task = { id:string; leadId:string; title:string; description?:string; dueDate?:string; assignedTo?:string; completed:boolean; createdAt:string };
+export const labels:Record<string,string>={NOVO:'Novo',PESQUISADO:'Pesquisado',PRONTO_PARA_CONTATO:'Pronto para contato',CONTATADO:'Contatado',RESPONDEU:'Respondeu',INTERESSADO:'Interessado',REUNIAO:'Reunião',PROPOSTA:'Proposta',CLIENTE:'Cliente',SEM_INTERESSE:'Sem interesse',NAO_CONTATAR:'Não contatar'};
