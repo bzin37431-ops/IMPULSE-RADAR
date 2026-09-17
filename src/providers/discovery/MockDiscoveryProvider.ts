@@ -1,19 +1,12 @@
 import { DiscoveryBusiness, DiscoveryProvider, DiscoveryQuery } from './DiscoveryProvider.js';
-const catalog = [
-  ['Studio Nativa', 'Instagram',  -23.1896, -45.8841], ['Clínica Essenza', 'Instagram', -23.1932, -45.8878],
-  ['Ateliê Aurora', 'website', -23.195, -45.891], ['Barbearia Norte', 'none', -23.181, -45.895],
-  ['Odonto Vale', 'social', -23.201, -45.879], ['Casa Verde Arquitetura', 'website', -23.185, -45.902],
-  ['Belle Estética', 'none', -23.197, -45.91], ['Movi Academia', 'social', -23.176, -45.87]
-] as const;
+const descriptors = ['Performance','Prime','Atlas','Strong','Vale','Movimento','Evolução','Central','Viva','Equilíbrio','Norte','Sul','Arena','Essencial','Avançada','360','Conquista','Horizonte','Conexão','Pleno'];
+const aliases: Record<string,string[]> = { academia:['academia','fitness','treinamento','musculação','crossfit','pilates','yoga'], barbearia:['barbearia','barber','corte masculino'], 'salão de beleza':['salão','beleza','cabeleireiro','cabelos'], restaurante:['restaurante','gastronomia','cozinha'], 'clínica de estética':['estética','beleza','dermatologia'], dentista:['odontologia','dentista','odonto'], advocacia:['advocacia','advogado','jurídico'] };
+const normalize=(value:string)=>value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+function familyFor(niche:string){const normalized=normalize(niche);const key=Object.keys(aliases).find(item=>normalized.includes(normalize(item)));return {label:niche,terms:key?aliases[key]:[niche]};}
 export class MockDiscoveryProvider implements DiscoveryProvider {
-  getProviderName() { return 'MOCK_DISCOVERY'; }
-  supportsLocation() { return true; }
-  getRateLimitInfo() { return { configured: true, requestsPerMinute: 120 }; }
-  async searchBusinesses(query: DiscoveryQuery): Promise<DiscoveryBusiness[]> {
-    return Array.from({ length: Math.min(query.quantity, 500) }, (_, index) => {
-      const item = catalog[index % catalog.length]; const [name, kind, latitude, longitude] = item;
-      const suffix = index >= catalog.length ? ` ${Math.floor(index / catalog.length) + 1}` : '';
-      return { externalIds: { mock: `mock-${index}` }, name: `${name}${suffix}`, category: query.niche, city: query.city, state: query.state, district: query.district || (index % 2 ? 'Centro' : 'Jardim Aquarius'), latitude: latitude + (index % 7) * 0.0003, longitude: longitude + (index % 5) * 0.0003, phone: index % 3 === 0 ? `(12) 98888-${String(1000 + index).slice(-4)}` : undefined, instagram: kind === 'Instagram' || kind === 'social' ? `https://instagram.com/${name.toLowerCase().replaceAll(' ', '')}` : undefined, website: kind === 'website' ? `https://www.${name.toLowerCase().replaceAll(' ', '')}.com.br` : undefined, rating: 4.1 + (index % 8) / 10, reviewsCount: 12 + index * 3, address: `${100 + index} Avenida Principal` };
-    });
-  }
+  constructor(private providerName='MOCK_DISCOVERY') {}
+  getProviderName(){return this.providerName;}
+  supportsLocation(){return true;}
+  getRateLimitInfo(){return {configured:true,requestsPerMinute:120};}
+  async searchBusinesses(query:DiscoveryQuery):Promise<DiscoveryBusiness[]> { const family=familyFor(query.niche); const noSite=query.digitalStatus==='NO_WEBSITE_FOUND'; const socialOnly=query.digitalStatus==='SOCIAL_ONLY'; const hasSite=query.digitalStatus==='HAS_WEBSITE'; return Array.from({length:Math.min(query.quantity,500)},(_,index)=>{const descriptor=descriptors[index%descriptors.length];const name=family.label+' '+descriptor;const hasSocial=socialOnly||(!noSite&&!hasSite&&index%3===0);const website=hasSite||(!noSite&&!socialOnly&&index%4===0)?'https://www.'+normalize(family.label).replaceAll(' ','')+(index+1)+'.com.br':undefined;return {externalIds:{mock:normalize(family.label)+'-'+index},name,category:family.label,city:query.city,state:query.state,district:query.district&&query.district!=='Toda a cidade'?query.district:(index%2?'Centro':'Jardim Aquarius'),latitude:-23.22+(index%20)*.002,longitude:-45.95+(index%20)*.002,phone:index%2===0?'(12) 98888-'+String(1000+index).slice(-4):undefined,instagram:hasSocial?'https://instagram.com/'+normalize(family.label).replaceAll(' ','')+(index+1):undefined,website,rating:4+(index%10)/10,reviewsCount:15+index*3,address:(100+index)+' Avenida Principal'};}); }
 }

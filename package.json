@@ -26,6 +26,7 @@
     "fastify": "^5.5.0",
     "ioredis": "^5.7.0",
     "jsonwebtoken": "^9.0.2",
+    "maplibre-gl": "^6.10.0",
     "pino": "^9.9.0",
     "zod": "^4.1.5"
   },
