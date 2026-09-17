@@ -16,6 +16,8 @@ import { createProvider, WhatsAppProvider } from './providers/whatsapp/index.js'
 import { SendQueue } from './queue.js';
 import { registerOperationalRoutes } from './operationalRoutes.js';
 import { PrismaPersistence } from './persistence.js';
+import { registerProspectingRoutes } from './prospectingRoutes.js';
+import { ProspectingQueue } from './prospectingQueue.js';
 
 const leadSchema = z.object({
   name: z.string().min(1), company: z.string().optional(), phone: z.string().optional(), email: z.string().email().optional().or(z.literal('')),
@@ -46,9 +48,9 @@ function protect(request: FastifyRequest, action: 'read' | 'write' | 'campaign' 
 function errorMessage(error: unknown) { return error instanceof Error ? error.message : 'Erro inesperado.'; }
 
 export function buildApp(opts: { store?: MemoryStore; provider?: WhatsAppProvider; persistence?: PrismaPersistence } = {}) {
-  const store = opts.store || new MemoryStore(env.TEST_MODE, opts.persistence); const provider = opts.provider || createProvider(); const queue = new SendQueue(store, provider);
+  const store = opts.store || new MemoryStore(env.TEST_MODE, opts.persistence); const provider = opts.provider || createProvider(); const queue = new SendQueue(store, provider); const prospectingQueue = new ProspectingQueue(store);
   const app = Fastify({ logger: { redact: ['req.headers.authorization', '*.token', '*.password'] } });
-  app.addHook('onClose', async () => { await queue.close(); });
+  app.addHook('onClose', async () => { await queue.close(); await prospectingQueue.close(); });
   app.removeContentTypeParser('application/json');
   app.addContentTypeParser('application/json', { parseAs: 'string' }, (request, body, done) => { try { (request as FastifyRequest & { rawBody?: Buffer }).rawBody = Buffer.from(String(body)); done(null, JSON.parse(String(body))); } catch (error) { done(error as Error, undefined); } });
   app.register(helmet); app.register(formbody); app.register(cookie); app.register(rateLimit, { max: 120, timeWindow: '1 minute' }); app.register(cors, { origin: env.ALLOWED_ORIGINS.split(',').map((item) => item.trim()), credentials: true });
@@ -78,5 +80,6 @@ export function buildApp(opts: { store?: MemoryStore; provider?: WhatsAppProvide
   app.post('/webhooks/whatsapp', async (request, reply) => { const raw = (request as FastifyRequest & { rawBody?: Buffer }).rawBody || (Buffer.isBuffer(request.body) ? request.body : Buffer.from(JSON.stringify(request.body))); const signature = typeof request.headers['x-hub-signature-256'] === 'string' ? request.headers['x-hub-signature-256'] : undefined; if (!env.TEST_MODE && !provider.validateWebhookSignature(raw, signature)) return reply.status(401).send({ error: 'INVALID_SIGNATURE' }); const payload = request.body as { entry?: Array<{ changes?: Array<{ value?: { messages?: Array<{ id: string; from: string; text?: { body: string } }>; statuses?: Array<{ id: string; status: string; errors?: Array<{ code: string; title?: string }> }> } }> }> }; const ids = (payload.entry || []).flatMap((entry) => (entry.changes || []).flatMap((change) => [...(change.value?.messages || []).map((item) => `message:${item.id}`), ...(change.value?.statuses || []).map((item) => `status:${item.id}:${item.status}`)])); const eventId = ids.length ? ids.sort().join('|') : crypto.createHash('sha256').update(raw).digest('hex'); if (store.histories.some((item) => item.details === `WEBHOOK:${eventId}`)) return { ok: true, idempotent: true }; store.addHistory('system', 'WEBHOOK_RECEIVED', `WEBHOOK:${eventId}`); store.settings.lastWebhook = new Date().toISOString(); for (const entry of payload.entry || []) for (const change of entry.changes || []) { for (const incoming of change.value?.messages || []) { const lead = [...store.leads.values()].find((item) => item.normalizedPhone === normalizePhone(incoming.from)); if (lead) { store.updateLead(lead.id, { status: 'RESPONDEU' }); store.addMessage({ conversationId: lead.id, direction: 'INBOUND', type: 'TEXT', content: incoming.text?.body || '[mensagem]', status: 'DELIVERED', providerMessageId: incoming.id, idempotencyKey: `in:${incoming.id}` }); } } for (const status of change.value?.statuses || []) { const message = store.messages.find((item) => item.providerMessageId === status.id); if (message) message.status = status.status.toUpperCase() as typeof message.status; } } return { ok: true }; });
   app.register(fastifyStatic, { root: path.join(process.cwd(), 'dist/web'), prefix: '/' }); app.setNotFoundHandler((request, reply) => { if (request.method === 'GET' && !request.url.startsWith('/api/') && !request.url.startsWith('/webhooks/')) return reply.sendFile('index.html'); return reply.status(404).send({ error: 'NOT_FOUND' }); });
   registerOperationalRoutes(app, store, queue);
+  registerProspectingRoutes(app, store, prospectingQueue);
   return app;
 }

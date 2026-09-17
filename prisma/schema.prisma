@@ -64,6 +64,29 @@ enum TemplateStatus {
   PAUSED
   DISABLED
 }
+enum ProspectingSearchStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+enum ProspectSourceMode {
+  PRINCIPAL
+  ALTERNATIVA
+  AMPLIADA
+}
+enum ProspectDigitalStatus {
+  UNKNOWN
+  NO_WEBSITE_FOUND
+  SOCIAL_ONLY
+  HAS_WEBSITE
+}
+enum ProspectCoverageMode {
+  STRICT
+  INTELLIGENT
+  BROAD
+}
 model User {
   id String @id @default(cuid())
   email String @unique
@@ -243,4 +266,86 @@ model SystemSetting {
   key String @id
   value Json
   updatedAt DateTime @updatedAt
+}
+model ProspectingSearch {
+  id String @id @default(cuid())
+  userId String?
+  state String
+  city String
+  district String?
+  niche String
+  sourceMode ProspectSourceMode
+  digitalStatus ProspectDigitalStatus
+  minScore Int @default(0)
+  quantity Int
+  coverageMode ProspectCoverageMode @default(INTELLIGENT)
+  status ProspectingSearchStatus @default(QUEUED)
+  progress Int @default(0)
+  providersConsulted Int @default(0)
+  uniqueResults Int @default(0)
+  noWebsiteCount Int @default(0)
+  socialOnlyCount Int @default(0)
+  websiteCount Int @default(0)
+  errorMessage String?
+  createdAt DateTime @default(now())
+  startedAt DateTime?
+  completedAt DateTime?
+  cancelledAt DateTime?
+  resultsCount Int @default(0)
+  businesses ProspectBusiness[]
+  providerResults ProviderResult[]
+  @@index([status, createdAt])
+}
+model ProspectBusiness {
+  id String @id @default(cuid())
+  searchId String
+  externalIds Json?
+  name String
+  normalizedName String
+  category String?
+  phone String?
+  normalizedPhone String?
+  whatsapp String?
+  email String?
+  instagram String?
+  facebook String?
+  tiktok String?
+  linkedin String?
+  website String?
+  domain String?
+  mapsUrl String?
+  address String?
+  district String?
+  city String
+  state String
+  postalCode String?
+  latitude Float?
+  longitude Float?
+  rating Float?
+  reviewsCount Int?
+  digitalStatus ProspectDigitalStatus @default(UNKNOWN)
+  digitalStatusConfidence String @default("LOW")
+  opportunityScore Int @default(0)
+  scoreBreakdown Json?
+  sourceProviders Json?
+  favorite Boolean @default(false)
+  discarded Boolean @default(false)
+  discardReason String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  verifiedAt DateTime?
+  search ProspectingSearch @relation(fields: [searchId], references: [id], onDelete: Cascade)
+  @@index([normalizedName, city, state])
+  @@index([normalizedPhone])
+  @@index([domain])
+}
+model ProviderResult {
+  id String @id @default(cuid())
+  searchId String
+  provider String
+  externalId String?
+  payload Json
+  createdAt DateTime @default(now())
+  search ProspectingSearch @relation(fields: [searchId], references: [id], onDelete: Cascade)
+  @@index([searchId, provider])
 }
