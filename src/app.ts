@@ -9,7 +9,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
-import { env } from './config.js';
+import { env, databaseUrl } from './config.js';
 import { can, normalizePhone, STATUSES } from './domain.js';
 import { MemoryStore } from './store.js';
 import { createProvider, WhatsAppProvider } from './providers/whatsapp/index.js';
@@ -61,7 +61,7 @@ export function buildApp(opts: { store?: MemoryStore; provider?: WhatsAppProvide
   app.addHook('onRequest', (request, reply, done) => { const exempt = request.url === '/api/auth/login' || request.url.startsWith('/api/public/') || request.url.startsWith('/webhooks/'); if (env.NODE_ENV === 'production' && !exempt && ['POST', 'PATCH', 'DELETE', 'PUT'].includes(request.method)) { const csrfCookie = request.cookies?.csrf; const csrfHeader = request.headers['x-csrf-token']; if (!csrfCookie || typeof csrfHeader !== 'string' || csrfCookie !== csrfHeader) return done(Object.assign(new Error('CSRF token inválido.'), { statusCode: 403 })); } done(); });
   app.addHook('preValidation', (request, reply, done) => { if (request.method === 'POST' && request.url === '/webhooks/whatsapp') { const parsed = webhookSchema.safeParse(request.body); if (!parsed.success) return done(Object.assign(new Error('Payload de webhook inválido.'), { statusCode: 400 })); request.body = parsed.data; } done(); });
   app.setErrorHandler((error, request, reply) => { request.log.error({ err: error, message: errorMessage(error) }, 'request failed'); reply.status((error as { statusCode?: number }).statusCode || 400).send({ error: 'REQUEST_ERROR', message: errorMessage(error) }); });
-  const health = async () => ({ api: 'ok', database: env.DATABASE_URL ? 'configured' : 'not_configured', redis: env.REDIS_URL ? 'configured' : 'not_configured', worker: process.env.VERCEL ? 'inline' : 'ok', metaApi: env.TEST_MODE ? 'mock-test-mode' : 'configured' });
+  const health = async () => ({ api: 'ok', database: databaseUrl ? 'configured' : 'not_configured', redis: env.REDIS_URL ? 'configured' : 'not_configured', worker: process.env.VERCEL ? 'inline' : 'ok', metaApi: env.TEST_MODE ? 'mock-test-mode' : 'configured' });
   app.get('/health', health);
   app.get('/api/health', health);
   app.get('/api/integrations', async () => { const geoapifyStatus = !env.GEOAPIFY_API_KEY ? 'Não configurado' : await new GeoapifyProvider().checkConnection() ? 'Ativo' : 'Erro'; const tavilyProvider = new TavilyWebSearchProvider(); const tavilyProviderStatus = tavilyProvider.getStatus(); const tavilyStatus = tavilyProviderStatus === 'NOT_CONFIGURED' ? 'Não configurado' : tavilyProviderStatus === 'RATE_LIMITED' || tavilyProviderStatus === 'QUOTA_EXHAUSTED' ? 'Limite atingido' : tavilyProviderStatus === 'ERROR' ? 'Erro' : 'Ativo'; const receitaProvider = new ReceitaCnpjEnrichmentProvider(); const receitaStatus = await receitaProvider.getIntegrationStatus(); const receitaLastUpdatedAt = await receitaProvider.getLastUpdatedAt(); const receitaMetadata = await receitaProvider.getMetadata(); const cnpjWsStatus = env.CNPJWS_ENRICHMENT_ENABLED ? 'Disponível' : 'Não configurado'; return { data: [
