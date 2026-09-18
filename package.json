@@ -13,6 +13,7 @@
     "db:migrate": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "db:import-cnpj": "tsx src/receitaCnpjImportCli.ts",
+    "db:sync-cnpj": "tsx src/receitaCnpjSyncCli.ts",
     "lint": "eslint . --ext .ts,.tsx"
   },
   "dependencies": {
