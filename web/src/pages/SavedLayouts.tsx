@@ -26,6 +26,7 @@ type Business = {
   websiteConfidence: string;
   socialConfidence: string;
   phoneConfidence: string;
+  sourceProviders?: string[];
   opportunityScore: number;
   scoreBreakdown?: Record<string, number>;
   sourceProviders?: string[];
@@ -221,7 +222,9 @@ export function SavedLayouts() {
         </div>
       )}
       <div className="saved-layout-grid">
-        {filtered.map((layout, index) => (
+        {filtered.map((layout, index) => {
+          const isMockBusiness = layout.business.sourceProviders?.some((source) => source.toLowerCase().startsWith("mock")) ?? false;
+          return (
           <article
             className="panel saved-layout-card"
             key={layout.id}
@@ -255,8 +258,8 @@ export function SavedLayouts() {
               <span>{layout.business.phone || "Telefone não localizado"}</span>
               <span>
                 {layout.business.rating
-                  ? `${layout.business.rating.toFixed(1)} ★ · ${layout.business.reviewsCount || 0} avaliações`
-                  : "Sem avaliação"}
+                  ? isMockBusiness ? "Avaliação Google real indisponível na simulação" : `Google ${layout.business.rating.toFixed(1)} ★ · ${layout.business.reviewsCount || 0} avaliações`
+                  : "Avaliação Google não localizada"}
               </span>
             </div>
             <div className="prospect-card-actions">
@@ -277,7 +280,8 @@ export function SavedLayouts() {
               </select>
             </div>
           </article>
-        ))}
+          );
+        })}
       </div>
       {selected && (
         <div className="drawer-backdrop" onClick={() => setSelected(undefined)}>
@@ -303,7 +307,7 @@ export function SavedLayouts() {
               >
                 Copiar telefone
               </button>
-              {selected.business.phone && (
+              {selected.business.phone && !selected.business.sourceProviders?.some((source) => source.toLowerCase().startsWith("mock")) && (
                 <a
                   className="primary"
                   href={wa(selected.business)}
@@ -313,7 +317,7 @@ export function SavedLayouts() {
                   Abrir WhatsApp
                 </a>
               )}
-              {selected.business.phone && (
+              {selected.business.phone && !selected.business.sourceProviders?.some((source) => source.toLowerCase().startsWith("mock")) && (
                 <a
                   className="ghost"
                   href={wa(selected.business)}
@@ -323,7 +327,7 @@ export function SavedLayouts() {
                   Testar WhatsApp
                 </a>
               )}
-              {selected.business.instagram && (
+              {selected.business.instagram && !selected.business.sourceProviders?.some((source) => source.toLowerCase().startsWith("mock")) && (
                 <a
                   className="ghost"
                   href={selected.business.instagram}
@@ -333,7 +337,7 @@ export function SavedLayouts() {
                   Instagram
                 </a>
               )}
-              {selected.business.mapsUrl && (
+              {selected.business.mapsUrl && !selected.business.sourceProviders?.some((source) => source.toLowerCase().startsWith("mock")) && (
                 <a
                   className="ghost"
                   href={selected.business.mapsUrl}
@@ -385,8 +389,8 @@ export function SavedLayouts() {
             <div className="drawer-section">
               <label>REPUTAÇÃO</label>
               <b>
-                {selected.business.rating
-                  ? `${selected.business.rating.toFixed(1)} / 5 · ${selected.business.reviewsCount || 0} avaliações`
+                {selected.business.rating && !selected.business.sourceProviders?.some((source) => source.toLowerCase().startsWith("mock"))
+                  ? `Google ${selected.business.rating.toFixed(1)} / 5 · ${selected.business.reviewsCount || 0} avaliações`
                   : "Sem avaliação"}
               </b>
             </div>

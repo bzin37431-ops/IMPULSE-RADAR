@@ -43,6 +43,7 @@ type Business = {
   digitalStatusConfidence: string;
   opportunityScore: number;
   scoreBreakdown?: Record<string, number>;
+  sourceProviders?: string[];
   latitude?: number;
   longitude?: number;
   favorite: boolean;
@@ -543,7 +544,9 @@ export function Prospecting({
                     : "Busca em andamento"}
               </h2>
               {search.isDemo && (
-                <span className="demo-badge">DADOS DE DEMONSTRAÇÃO</span>
+                <span className="demo-badge">
+                  SIMULAÇÃO · contatos e avaliações reais indisponíveis
+                </span>
               )}
             </div>
             <div className="prospect-stats">
@@ -594,7 +597,9 @@ export function Prospecting({
           ) : (
             <div className="prospect-split">
               <div className="prospect-list">
-                {visibleResults.map((item) => (
+                {visibleResults.map((item, visibleIndex) => {
+                  const isMockBusiness = item.sourceProviders?.some((source) => source.toLowerCase().startsWith("mock")) ?? false;
+                  return (
                   <article
                     className={`prospect-card ${selectedId === item.id ? "selected" : ""}`}
                     id={`prospect-${item.id}`}
@@ -617,14 +622,17 @@ export function Prospecting({
                           />
                           Selecionar
                         </label>
+                        <span className="result-rank">
+                          #{String(resultPage * 50 + visibleIndex + 1).padStart(2, "0")}
+                        </span>
                         <h3>{item.name}</h3>
                         <small>
                           {item.category} · {item.city}
                           {item.district ? ` · ${item.district}` : ""}
                         </small>
                       </div>
-                      <strong className="score-badge">
-                        {item.opportunityScore}
+                      <strong className="score-label">
+                        Score {item.opportunityScore}
                       </strong>
                     </div>
                     <div className="prospect-card-meta">
@@ -634,11 +642,23 @@ export function Prospecting({
                         {digitalLabels[item.digitalStatus] ||
                           item.digitalStatus}
                       </span>
-                      <span>{item.phone || "Sem telefone"}</span>
-                      <span>
-                        {item.rating
-                          ? `${item.rating.toFixed(1)} ★ · ${item.reviewsCount || 0} avaliações`
-                          : "Sem avaliação"}
+                      {item.phone && !isMockBusiness ? (
+                        <a
+                          className="contact-chip"
+                          href={`tel:${item.phone.replace(/[^\d+]/g, "")}`}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          ☎ {item.phone}
+                        </a>
+                      ) : isMockBusiness ? (
+                        <span>Contato real indisponível na simulação</span>
+                      ) : (
+                        <span>Telefone não localizado</span>
+                      )}
+                      <span className="rating-chip">
+                        {!isMockBusiness && typeof item.rating === "number"
+                          ? `Google ${item.rating.toFixed(1)} ★ · ${item.reviewsCount || 0} avaliações`
+                          : isMockBusiness ? "Avaliação Google real indisponível na simulação" : "Avaliação Google não localizada"}
                       </span>
                     </div>
                     <div className="prospect-card-actions">
@@ -658,29 +678,32 @@ export function Prospecting({
                       >
                         Salvar layout
                       </button>
-                      {item.website && (
+                      {item.website && !isMockBusiness && (
                         <a
                           className="ghost"
                           href={item.website}
                           target="_blank"
                           rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
                         >
-                          Abrir site
+                          Abrir site real
                         </a>
                       )}
-                      {item.instagram && (
+                      {item.instagram && !isMockBusiness && (
                         <a
                           className="ghost"
                           href={item.instagram}
                           target="_blank"
                           rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
                         >
-                          Instagram
+                          Abrir Instagram real
                         </a>
                       )}
                     </div>
                   </article>
-                ))}
+                  );
+                })}
                 {results.length > 50 && (
                   <div className="prospect-pagination">
                     <button className="ghost" disabled={resultPage === 0} onClick={() => setResultPage((page) => page - 1)}>
