@@ -1270,7 +1270,13 @@ function SearchHistory() {
   );
 }
 function Integrations() {
-  const integrations = [
+  const [integrations, setIntegrations] = useState<Array<[string, string, string, string]>>([]);
+  useEffect(() => {
+    get<{ data: Array<{ name: string; status: string; detail: string; requirement: string }> }>('/api/integrations')
+      .then((result) => setIntegrations(result.data.map((item) => [item.name, item.status, item.detail, item.requirement])))
+      .catch(() => setIntegrations([]));
+  }, []);
+  const fallback: Array<[string, string, string, string]> = [
     [
       "Google Places",
       "Não configurado",
@@ -1302,6 +1308,7 @@ function Integrations() {
       "OpenStreetMap raster tiles.",
     ],
   ];
+  const rows = integrations.length ? integrations : fallback;
   return (
     <>
       <section className="hero-row">
@@ -1310,7 +1317,7 @@ function Integrations() {
         </p>
       </section>
       <section className="metrics">
-        {integrations.map((item) => (
+        {rows.map((item) => (
           <div className="metric" key={item[0]}>
             <span>{item[0]}</span>
             <strong className="integration-status">{item[1]}</strong>
@@ -1320,7 +1327,7 @@ function Integrations() {
       </section>
       <section className="panel">
         <h2>Capacidade e configuração</h2>
-        {integrations.map((item) => (
+        {rows.map((item) => (
           <p className="muted" key={item[0]}>
             <b>{item[0]}:</b> {item[3]}
           </p>

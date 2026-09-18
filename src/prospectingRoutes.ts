@@ -12,7 +12,13 @@ import { deduplicateBusinesses, normalizeBusiness } from "./prospecting.js";
 import { ProspectingQueue } from "./prospectingQueue.js";
 import { DistrictProvider, IBGELocationProvider } from "./locationService.js";
 import { BUSINESS_NICHES } from "./data/businessNiches.js";
-import { isNicheRelevant } from "./nicheRelevance.js";
+import { assessNicheRelevance } from "./nicheRelevance.js";
+import { env } from "./config.js";
+import { ProspectEnrichmentService } from "./prospectEnrichmentService.js";
+import { WebSearchProvider } from "./providers/discovery/WebSearchDiscoveryProvider.js";
+import { ReceitaCnpjEnrichmentProvider } from "./providers/enrichment/ReceitaCnpjEnrichmentProvider.js";
+import { CnpjWsProvider } from "./providers/enrichment/CnpjWsProvider.js";
+import { OsmContactEnrichmentProvider } from "./providers/enrichment/OsmContactEnrichmentProvider.js";
 
 const ibgeLocationProvider = new IBGELocationProvider();
 const districtProvider = new DistrictProvider();
@@ -36,6 +42,13 @@ async function withTimeout<T>(promise: Promise<T>, milliseconds: number) {
     if (timer) clearTimeout(timer);
   }
 }
+function searchLog(searchId: string, event: string, fields: Record<string, unknown> = {}) {
+  process.stdout.write(`${JSON.stringify({ level: "info", source: "prospecting", searchId, event, ...fields })}\n`);
+}
+const stateAliases: Record<string, string> = { AC: "ACRE", AL: "ALAGOAS", AP: "AMAPA", AM: "AMAZONAS", BA: "BAHIA", CE: "CEARA", DF: "DISTRITOFEDERAL", ES: "ESPIRITOSANTO", GO: "GOIAS", MA: "MARANHAO", MT: "MATOGROSSO", MS: "MATOGROSSODOSUL", MG: "MINASGERAIS", PA: "PARA", PB: "PARAIBA", PR: "PARANA", PE: "PERNAMBUCO", PI: "PIAUI", RJ: "RIODEJANEIRO", RN: "RIOGRANDEDONORTE", RS: "RIOGRAN。他DOSUL", RO: "RONDONIA", RR: "RORAIMA", SC: "SANTACATARINA", SP: "SAOPAULO", SE: "SERGIPE", TO: "TOCANTINS" };
+const stateKey = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z]/gi, "").toUpperCase();
+stateAliases.RS = "RIOGRANDEDOSUL";
+const sameState = (value: string, expected: string) => stateKey(value) === stateKey(expected) || stateAliases[stateKey(value)] === stateKey(expected) || stateAliases[stateKey(expected)] === stateKey(value);
 function assertCan(request: FastifyRequest) {
   if (request.headers["x-user-role"] === "VIEWER")
     throw Object.assign(new Error("Permissão insuficiente."), {
@@ -54,9 +67,14 @@ function toBusiness(
     normalizedName: item.normalizedName,
     category: item.category,
     phone: item.phone,
+    phoneSource: item.phoneSource,
+    phoneSourceId: item.phoneSourceId,
+    phoneSourceUrl: item.phoneSourceUrl,
+    phoneVerifiedAt: item.phoneVerifiedAt,
     normalizedPhone: item.normalizedPhone,
     whatsapp: item.whatsapp,
     email: item.email,
+    emailSource: item.emailSource,
     instagram: item.instagram,
     facebook: item.facebook,
     tiktok: item.tiktok,
@@ -80,7 +98,7 @@ function toBusiness(
       item.instagram || item.facebook || item.tiktok || item.linkedin
         ? "FOUND"
         : "UNKNOWN",
-    phoneConfidence: item.normalizedPhone ? "NORMALIZED" : "UNKNOWN",
+    phoneConfidence: item.phoneConfidence || (item.normalizedPhone ? "NORMALIZED" : "UNKNOWN"),
     opportunityScore: item.score,
     scoreBreakdown: item.breakdown,
     sourceProviders: item.externalIds ? Object.keys(item.externalIds) : [],
@@ -586,7 +604,20 @@ export async function runSearch(search: ProspectSearch, store: MemoryStore) {
     const demo = providers.every((provider) =>
       provider.getProviderName().startsWith("MOCK"),
     );
+    const webProvider = providers.find((provider) => ["WEB_SEARCH", "TAVILY_WEB_SEARCH"].includes(provider.getProviderName())) as WebSearchProvider | undefined;
+    const tavilyProvider = providers.find((provider) => provider.getProviderName() === "TAVILY_WEB_SEARCH") as WebSearchProvider | undefined;
+    const receitaProvider = new ReceitaCnpjEnrichmentProvider();
+    const osmProvider = new OsmContactEnrichmentProvider();
+    const cnpjWsProvider = new CnpjWsProvider();
+    const enrichmentService = new ProspectEnrichmentService([receitaProvider, osmProvider, cnpjWsProvider, ...(webProvider ? [webProvider] : [])]);
+    searchLog(search.id, "discovery_configuration", {
+      geoapifyKeyLoaded: Boolean(env.GEOAPIFY_API_KEY),
+      providersSelected: providers.map((provider) => provider.getProviderName()),
+      discoveryMode: env.DISCOVERY_MODE,
+      discoveryTestMode: env.DISCOVERY_TEST_MODE,
+    });
     const raw = [];
+    let rawGeoapify = 0;
     const providerErrors: string[] = [];
     for (const provider of providers) {
       if (search.status === "CANCELLED") return;
@@ -602,18 +633,20 @@ export async function runSearch(search: ProspectSearch, store: MemoryStore) {
               niche: search.niche,
               quantity: search.quantity,
               digitalStatus: search.digitalStatus,
+              coverageMode: search.coverageMode,
+              searchId: search.id,
             }),
             10000,
           );
           break;
         } catch (error) {
           if (attempt === 1)
-            providerErrors.push(
-              `${provider.getProviderName()}: ${error instanceof Error ? error.message : "falha desconhecida"}`,
-            );
+            { const message = `${provider.getProviderName()}: ${error instanceof Error ? error.message : "falha desconhecida"}`; providerErrors.push(message); searchLog(search.id, "provider_error", { provider: provider.getProviderName(), message }); }
         }
       }
       raw.push(...providerResults);
+      if (provider.getProviderName() === "GEOAPIFY") rawGeoapify += providerResults.length;
+      searchLog(search.id, "provider_results", { provider: provider.getProviderName(), rawCount: providerResults.length });
       search.progress = Math.min(
         80,
         Math.round(
@@ -622,52 +655,46 @@ export async function runSearch(search: ProspectSearch, store: MemoryStore) {
       );
       store.persistProspectSearch(search);
     }
-    const normalized = deduplicateBusinesses(raw.map(normalizeBusiness))
-      .filter(
-        (item) =>
-          item.city.trim().toLocaleLowerCase("pt-BR") ===
-          search.city.trim().toLocaleLowerCase("pt-BR"),
-      )
-      .filter(
-        (item) =>
-          item.state.trim().toUpperCase() === search.state.trim().toUpperCase(),
-      )
-      .filter((item) => isNicheRelevant(item.name, item.category, search.niche))
-      .filter((item) => demo || Boolean(item.normalizedPhone))
-      .filter(
-        (item) =>
-          !store.prospectBusinesses.some(
-            (existing) =>
-              existing.discarded &&
-              ((item.normalizedPhone &&
-                existing.normalizedPhone === item.normalizedPhone) ||
-                (existing.normalizedName === item.normalizedName &&
-                  existing.city.toLocaleLowerCase("pt-BR") ===
-                    item.city.toLocaleLowerCase("pt-BR") &&
-                  existing.state.toUpperCase() === item.state.toUpperCase())),
-          ),
-      )
-      .filter((item) => item.score >= search.minScore)
-      .filter(
-        (item) =>
-          search.digitalStatus === "UNKNOWN" ||
-          item.digitalStatus === search.digitalStatus,
-      )
-      .slice(0, search.quantity);
+    const normalizedRaw = raw.map(normalizeBusiness);
+    const afterState = normalizedRaw.filter((item) => sameState(item.state, search.state));
+    const afterCity = afterState.filter((item) => item.city.trim().toLocaleLowerCase("pt-BR") === search.city.trim().toLocaleLowerCase("pt-BR"));
+    const afterDistrict = afterCity.filter((item) => !search.district || search.district === "Toda a cidade" || item.district?.trim().toLocaleLowerCase("pt-BR") === search.district.trim().toLocaleLowerCase("pt-BR"));
+    const nicheCandidates = [];
+    for (const item of afterDistrict) {
+      const relevance = assessNicheRelevance(item.name, item.category, search.niche);
+      if (relevance.relevant) nicheCandidates.push(item);
+      else if (env.NODE_ENV !== "production") searchLog(search.id, "niche_rejection", { name: item.name, categories: item.category, nicheRelevanceScore: relevance.score, reason: relevance.reason });
+    }
+    const initialDedupe = deduplicateBusinesses(nicheCandidates);
+    const enrichmentResults = [];
+    for (const item of initialDedupe) enrichmentResults.push(await enrichmentService.enrich(item, { state: search.state, city: search.city, district: search.district, niche: search.niche, quantity: search.quantity, digitalStatus: search.digitalStatus, coverageMode: search.coverageMode, searchId: search.id }));
+    const enriched = enrichmentResults.map((result) => normalizeBusiness(result.business));
+    const afterPhone = enriched.filter((item) => demo || Boolean(item.normalizedPhone));
+    const afterDigitalStatus = afterPhone.filter((item) => search.digitalStatus === "UNKNOWN" || item.digitalStatus === search.digitalStatus);
+    const afterMinScore = afterDigitalStatus.filter((item) => item.score >= search.minScore);
+    const afterDedupe = deduplicateBusinesses(afterMinScore).filter((item) => !store.prospectBusinesses.some((existing) => existing.discarded && ((item.normalizedPhone && existing.normalizedPhone === item.normalizedPhone) || (existing.normalizedName === item.normalizedName && existing.city.toLocaleLowerCase("pt-BR") === item.city.toLocaleLowerCase("pt-BR") && existing.state.toUpperCase() === item.state.toUpperCase())))).slice(0, search.quantity);
+    const phoneFromGeoapify = initialDedupe.filter((item) => item.phoneSource === "GEOAPIFY" || Boolean(item.phone && !item.enrichmentAttempted)).length;
+    const phoneEnrichmentAttempted = enrichmentResults.filter((result) => result.attempted).length;
+    const phoneEnrichmentFound = enrichmentResults.filter((result) => result.foundPhone && result.attempted).length;
+    const receitaMatchesAttempted = enrichmentResults.filter((result) => result.attemptedProviders.includes("RECEITA_CNPJ")).length;
+    const receitaMatchesFound = enrichmentResults.filter((result) => result.matchedProviders.includes("RECEITA_CNPJ")).length;
+    const phoneFromReceita = enrichmentResults.filter((result) => result.source === "RECEITA_CNPJ").length;
+    const phoneFromOsm = enrichmentResults.filter((result) => result.source === "OSM_CONTACT").length;
+    const cnpjWsRequests = cnpjWsProvider.getRequestCount();
+    const phoneFromCnpjWs = enrichmentResults.filter((result) => result.source === "CNPJ_WS").length;
+    const tavilyCandidates = enrichmentResults.filter((result) => result.attemptedProviders.includes("TAVILY_WEB_SEARCH")).length;
+    const tavilyRequests = tavilyProvider?.getRequestCount?.() || 0;
+    const diagnostics = { geoapifyKeyLoaded: Boolean(env.GEOAPIFY_API_KEY), providersSelected: providers.map((provider) => provider.getProviderName()), rawGeoapify, afterState: afterState.length, afterCity: afterCity.length, afterDistrict: afterDistrict.length, afterNicheBroad: nicheCandidates.length, enrichmentCandidates: initialDedupe.length, phoneFromGeoapify, phoneEnrichmentAttempted, phoneEnrichmentFound, receitaMatchesAttempted, receitaMatchesFound, phoneFromReceita, phoneFromOsm, cnpjWsRequests, phoneFromCnpjWs, tavilyCandidates, tavilyRequests, phoneFromTavily: enrichmentResults.filter((result) => result.source === "TAVILY_WEB_SEARCH").length, afterPhone: afterPhone.length, afterDigitalStatus: afterDigitalStatus.length, afterMinScore: afterMinScore.length, afterDedupe: afterDedupe.length, finalCount: afterDedupe.length };
+    search.diagnostics = diagnostics;
+    searchLog(search.id, "search_stage_counts", diagnostics);
+    searchLog(search.id, "rejection_aggregates", { NICHE_MISMATCH: afterDistrict.length - nicheCandidates.length, MISSING_PHONE: initialDedupe.length - afterPhone.length, WEBSITE_STATUS_MISMATCH: afterPhone.length - afterDigitalStatus.length, LOW_SCORE: afterDigitalStatus.length - afterMinScore.length, DUPLICATE: afterMinScore.length - afterDedupe.length });
+    const normalized = afterDedupe;
     for (const item of normalized) {
       if (search.status === "CANCELLED") return;
       const business = toBusiness(search.id, item);
       store.persistProspectBusiness(business);
     }
-    search.progress =
-      normalized.length >= search.quantity
-        ? 100
-        : Math.min(
-            99,
-            Math.round(
-              (normalized.length / Math.max(1, search.quantity)) * 100,
-            ),
-          );
+    search.progress = 100;
     if (providerErrors.length)
       search.errorMessage = `Resultados parciais: ${providerErrors.join("; ")}`;
     search.status = normalized.length || !providerErrors.length ? "COMPLETED" : "FAILED";
@@ -690,6 +717,7 @@ export async function runSearch(search: ProspectSearch, store: MemoryStore) {
         "Nenhuma empresa válida com telefone foi encontrada.";
     store.persistProspectSearch(search);
   } catch (error) {
+    searchLog(search.id, "search_error", { message: error instanceof Error ? error.message : "Falha na busca." });
     search.status = "FAILED";
     search.errorMessage =
       error instanceof Error ? error.message : "Falha na busca.";

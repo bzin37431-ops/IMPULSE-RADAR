@@ -356,9 +356,14 @@ model ProspectBusiness {
   normalizedName          String
   category                String?
   phone                   String?
+  phoneSource             String?
+  phoneSourceId           String?
+  phoneSourceUrl          String?
+  phoneVerifiedAt         DateTime?
   normalizedPhone         String?
   whatsapp                String?
   email                   String?
+  emailSource             String?
   instagram               String?
   facebook                String?
   tiktok                  String?
@@ -423,4 +428,58 @@ model ProviderResult {
   search     ProspectingSearch @relation(fields: [searchId], references: [id], onDelete: Cascade)
 
   @@index([searchId, provider])
+}
+
+model CnpjEstablishmentIndex {
+  cnpj                   String   @id
+  cnpjBasic              String?
+  cnpjOrder              String?
+  cnpjDv                 String?
+  branchType             String?
+  businessName           String
+  normalizedBusinessName String
+  tradeName              String?
+  normalizedTradeName    String?
+  status                 String
+  cnae                   String?
+  cnaeSecondary          String?
+  street                 String?
+  number                 String?
+  complement             String?
+  district               String?
+  city                   String
+  state                  String
+  postalCode             String?
+  phone1                 String?
+  phone2                 String?
+  email                  String?
+  updatedAt              DateTime @updatedAt
+
+  @@index([normalizedTradeName])
+  @@index([normalizedBusinessName])
+  @@index([city, state])
+  @@index([postalCode])
+  @@index([cnae])
+}
+
+model CnpjCompanyIndex {
+  cnpjBasic  String   @id
+  businessName String
+  updatedAt  DateTime @updatedAt
+}
+
+model CnpjCnaeIndex {
+  code       String   @id
+  description String
+  updatedAt  DateTime @updatedAt
+}
+
+model CnpjImportMetadata {
+  id                 String   @id
+  datasetVersion     String
+  datasetImportedAt  DateTime
+  source             String
+  establishmentCount  Int      @default(0)
+  ufs                Json?
+  updatedAt           DateTime @updatedAt
 }

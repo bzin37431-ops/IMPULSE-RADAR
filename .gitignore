@@ -6,3 +6,11 @@ dist/
 coverage/
 *.log
 prisma/dev.db
+data/cnpj/
+*.zip
+*.part
+*.dump
+*.sql.gz
+backups/
+tmp/
+.vite/

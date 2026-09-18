@@ -67,6 +67,7 @@ export type ProspectSearch = {
   completedAt?: string;
   cancelledAt?: string;
   resultsCount: number;
+  diagnostics?: { geoapifyKeyLoaded: boolean; providersSelected: string[]; rawGeoapify: number; afterState: number; afterCity: number; afterDistrict: number; afterNicheBroad: number; enrichmentCandidates: number; phoneFromGeoapify: number; phoneEnrichmentAttempted: number; phoneEnrichmentFound: number; receitaMatchesAttempted: number; receitaMatchesFound: number; phoneFromReceita: number; phoneFromOsm: number; cnpjWsRequests: number; phoneFromCnpjWs: number; tavilyCandidates: number; tavilyRequests: number; phoneFromTavily: number; afterPhone: number; afterDigitalStatus: number; afterMinScore: number; afterDedupe: number; finalCount: number };
 };
 export type ProspectBusiness = {
   id: string;
@@ -76,9 +77,14 @@ export type ProspectBusiness = {
   normalizedName: string;
   category?: string;
   phone?: string;
+  phoneSource?: string;
+  phoneSourceId?: string;
+  phoneSourceUrl?: string;
+  phoneVerifiedAt?: string;
   normalizedPhone?: string;
   whatsapp?: string;
   email?: string;
+  emailSource?: string;
   instagram?: string;
   facebook?: string;
   tiktok?: string;

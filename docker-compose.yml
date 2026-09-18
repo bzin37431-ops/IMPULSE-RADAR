@@ -20,7 +20,13 @@ services:
       DATABASE_URL: postgresql://impulse:impulse@postgres:5432/impulse?schema=public
       REDIS_URL: redis://redis:6379
       PROVIDER_MODE: meta-cloud-api
-      TEST_MODE: "true"
+      TEST_MODE: ${TEST_MODE:-false}
+      DISCOVERY_MODE: ${DISCOVERY_MODE:-real}
+      DISCOVERY_TEST_MODE: ${DISCOVERY_TEST_MODE:-false}
+      GEOAPIFY_API_KEY: ${GEOAPIFY_API_KEY:-}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+      CNPJWS_ENRICHMENT_ENABLED: ${CNPJWS_ENRICHMENT_ENABLED:-false}
+      OSM_CONTACT_ENRICHMENT_ENABLED: ${OSM_CONTACT_ENRICHMENT_ENABLED:-false}
       JWT_SECRET: ${JWT_SECRET:-local-development-only-change-me}
       CORS_ORIGIN: http://localhost:3000
     depends_on:
