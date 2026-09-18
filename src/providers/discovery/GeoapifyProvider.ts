@@ -43,17 +43,22 @@ export class GeoapifyProvider implements DiscoveryProvider {
   getProviderName() { return 'GEOAPIFY'; }
   supportsLocation() { return Boolean(this.configuredKey); }
   getRateLimitInfo() { return { configured: Boolean(this.configuredKey), requestsPerMinute: 60 }; }
-  async checkConnection() { if (!this.configuredKey) return false; try { await this.request<GeoCollection>('/v1/geocode/search', new URLSearchParams({ text: 'São Paulo, Brazil', format: 'json', limit: '1' })); return true; } catch { return false; } }
-  private async request<T>(path: string, params: URLSearchParams): Promise<T> {
+  private log(query: DiscoveryQuery, event: string, fields: Record<string, unknown> = {}) { process.stdout.write(`${JSON.stringify({ level: 'info', source: 'prospecting', searchId: query.searchId, provider: 'GEOAPIFY', event, ...fields })}\n`); }
+  async checkConnection() { if (!this.configuredKey) return false; try { await this.request<GeoCollection>('/v1/geocode/search', new URLSearchParams({ text: 'São Paulo, Brazil', format: 'json', limit: '1' }), { city: 'São Paulo', state: 'São Paulo', niche: 'healthcare', quantity: 1, searchId: 'integration-check' }); return true; } catch { return false; } }
+  private async request<T>(path: string, params: URLSearchParams, query: DiscoveryQuery): Promise<T> {
     if (!this.configuredKey) throw new Error('GEOAPIFY_API_KEY não configurada.');
+    const safeUrl = `${API}${path}?${params}`;
+    this.log(query, 'geoapify_request', { endpoint: safeUrl });
     params.set('apiKey', this.configuredKey);
     const response = await fetch(`${API}${path}?${params}`, { signal: AbortSignal.timeout(10000), headers: { Accept: 'application/json' } });
+    this.log(query, 'geoapify_response', { endpoint: safeUrl, httpStatus: response.status });
     if (!response.ok) throw new Error(`Geoapify respondeu ${response.status}.`);
     return response.json() as Promise<T>;
   }
   private async resolveArea(query: DiscoveryQuery): Promise<Area> {
     const params = new URLSearchParams({ text: `${query.city}, ${query.state}, Brazil`, format: 'geojson', limit: '10', filter: 'countrycode:br', lang: 'pt' });
-    const result = await this.request<GeoCollection>('/v1/geocode/search', params);
+    const result = await this.request<GeoCollection>('/v1/geocode/search', params, query);
+    this.log(query, 'geoapify_geocoding_results', { resultCount: result.features?.length || 0 });
     const city = normalize(query.city);
     const state = normalize(query.state);
     const feature = (result.features || []).find((item) => {
@@ -85,7 +90,8 @@ export class GeoapifyProvider implements DiscoveryProvider {
     }
     const businesses: DiscoveryBusiness[] = [];
     for (const params of filters) {
-      const data = await this.request<GeoCollection>('/v2/places', params);
+      const data = await this.request<GeoCollection>('/v2/places', params, query);
+      this.log(query, 'geoapify_places_results', { resultCount: data.features?.length || 0 });
       for (const feature of data.features || []) {
         const business = normalizeGeoapifyFeature(feature, query);
         if (business && normalize(business.city) === normalize(query.city) && normalize(business.state) === normalize(query.state)) businesses.push(business);

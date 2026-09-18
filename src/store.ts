@@ -67,6 +67,7 @@ export type ProspectSearch = {
   completedAt?: string;
   cancelledAt?: string;
   resultsCount: number;
+  diagnostics?: { geoapifyKeyLoaded: boolean; providersSelected: string[]; rawGeoapify: number; afterState: number; afterCity: number; afterDistrict: number; afterNiche: number; afterPhone: number; afterDigitalStatus: number; afterMinScore: number; afterDedupe: number };
 };
 export type ProspectBusiness = {
   id: string;

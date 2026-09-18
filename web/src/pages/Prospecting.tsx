@@ -563,7 +563,7 @@ export function Prospecting({
                 <b>{search.socialOnlyCount}</b> só rede social
               </span>
               <span>
-                <b>{search.progress}%</b> progresso
+                <b>{search.status === "COMPLETED" ? 100 : search.progress}%</b> progresso
               </span>
             </div>
           </div>

@@ -13,6 +13,7 @@ import { ProspectingQueue } from "./prospectingQueue.js";
 import { DistrictProvider, IBGELocationProvider } from "./locationService.js";
 import { BUSINESS_NICHES } from "./data/businessNiches.js";
 import { isNicheRelevant } from "./nicheRelevance.js";
+import { env } from "./config.js";
 
 const ibgeLocationProvider = new IBGELocationProvider();
 const districtProvider = new DistrictProvider();
@@ -36,6 +37,13 @@ async function withTimeout<T>(promise: Promise<T>, milliseconds: number) {
     if (timer) clearTimeout(timer);
   }
 }
+function searchLog(searchId: string, event: string, fields: Record<string, unknown> = {}) {
+  process.stdout.write(`${JSON.stringify({ level: "info", source: "prospecting", searchId, event, ...fields })}\n`);
+}
+const stateAliases: Record<string, string> = { AC: "ACRE", AL: "ALAGOAS", AP: "AMAPA", AM: "AMAZONAS", BA: "BAHIA", CE: "CEARA", DF: "DISTRITOFEDERAL", ES: "ESPIRITOSANTO", GO: "GOIAS", MA: "MARANHAO", MT: "MATOGROSSO", MS: "MATOGROSSODOSUL", MG: "MINASGERAIS", PA: "PARA", PB: "PARAIBA", PR: "PARANA", PE: "PERNAMBUCO", PI: "PIAUI", RJ: "RIODEJANEIRO", RN: "RIOGRANDEDONORTE", RS: "RIOGRAN。他DOSUL", RO: "RONDONIA", RR: "RORAIMA", SC: "SANTACATARINA", SP: "SAOPAULO", SE: "SERGIPE", TO: "TOCANTINS" };
+const stateKey = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z]/gi, "").toUpperCase();
+stateAliases.RS = "RIOGRANDEDOSUL";
+const sameState = (value: string, expected: string) => stateKey(value) === stateKey(expected) || stateAliases[stateKey(value)] === stateKey(expected) || stateAliases[stateKey(expected)] === stateKey(value);
 function assertCan(request: FastifyRequest) {
   if (request.headers["x-user-role"] === "VIEWER")
     throw Object.assign(new Error("Permissão insuficiente."), {
@@ -586,7 +594,14 @@ export async function runSearch(search: ProspectSearch, store: MemoryStore) {
     const demo = providers.every((provider) =>
       provider.getProviderName().startsWith("MOCK"),
     );
+    searchLog(search.id, "discovery_configuration", {
+      geoapifyKeyLoaded: Boolean(env.GEOAPIFY_API_KEY),
+      providersSelected: providers.map((provider) => provider.getProviderName()),
+      discoveryMode: env.DISCOVERY_MODE,
+      discoveryTestMode: env.DISCOVERY_TEST_MODE,
+    });
     const raw = [];
+    let rawGeoapify = 0;
     const providerErrors: string[] = [];
     for (const provider of providers) {
       if (search.status === "CANCELLED") return;
@@ -603,18 +618,19 @@ export async function runSearch(search: ProspectSearch, store: MemoryStore) {
               quantity: search.quantity,
               digitalStatus: search.digitalStatus,
               coverageMode: search.coverageMode,
+              searchId: search.id,
             }),
             10000,
           );
           break;
         } catch (error) {
           if (attempt === 1)
-            providerErrors.push(
-              `${provider.getProviderName()}: ${error instanceof Error ? error.message : "falha desconhecida"}`,
-            );
+            { const message = `${provider.getProviderName()}: ${error instanceof Error ? error.message : "falha desconhecida"}`; providerErrors.push(message); searchLog(search.id, "provider_error", { provider: provider.getProviderName(), message }); }
         }
       }
       raw.push(...providerResults);
+      if (provider.getProviderName() === "GEOAPIFY") rawGeoapify += providerResults.length;
+      searchLog(search.id, "provider_results", { provider: provider.getProviderName(), rawCount: providerResults.length });
       search.progress = Math.min(
         80,
         Math.round(
@@ -623,56 +639,25 @@ export async function runSearch(search: ProspectSearch, store: MemoryStore) {
       );
       store.persistProspectSearch(search);
     }
-    const normalized = deduplicateBusinesses(raw.map(normalizeBusiness))
-      .filter(
-        (item) =>
-          item.city.trim().toLocaleLowerCase("pt-BR") ===
-          search.city.trim().toLocaleLowerCase("pt-BR"),
-      )
-      .filter(
-        (item) =>
-          item.state.trim().toUpperCase() === search.state.trim().toUpperCase(),
-      )
-      .filter(
-        (item) => !search.district || search.district === "Toda a cidade" ||
-          item.district?.trim().toLocaleLowerCase("pt-BR") === search.district.trim().toLocaleLowerCase("pt-BR"),
-      )
-      .filter((item) => isNicheRelevant(item.name, item.category, search.niche))
-      .filter((item) => demo || Boolean(item.normalizedPhone))
-      .filter(
-        (item) =>
-          !store.prospectBusinesses.some(
-            (existing) =>
-              existing.discarded &&
-              ((item.normalizedPhone &&
-                existing.normalizedPhone === item.normalizedPhone) ||
-                (existing.normalizedName === item.normalizedName &&
-                  existing.city.toLocaleLowerCase("pt-BR") ===
-                    item.city.toLocaleLowerCase("pt-BR") &&
-                  existing.state.toUpperCase() === item.state.toUpperCase())),
-          ),
-      )
-      .filter((item) => item.score >= search.minScore)
-      .filter(
-        (item) =>
-          search.digitalStatus === "UNKNOWN" ||
-          item.digitalStatus === search.digitalStatus,
-      )
-      .slice(0, search.quantity);
+    const normalizedRaw = raw.map(normalizeBusiness);
+    const afterState = normalizedRaw.filter((item) => sameState(item.state, search.state));
+    const afterCity = afterState.filter((item) => item.city.trim().toLocaleLowerCase("pt-BR") === search.city.trim().toLocaleLowerCase("pt-BR"));
+    const afterDistrict = afterCity.filter((item) => !search.district || search.district === "Toda a cidade" || item.district?.trim().toLocaleLowerCase("pt-BR") === search.district.trim().toLocaleLowerCase("pt-BR"));
+    const afterNiche = afterDistrict.filter((item) => isNicheRelevant(item.name, item.category, search.niche));
+    const afterPhone = afterNiche.filter((item) => demo || Boolean(item.normalizedPhone));
+    const afterDigitalStatus = afterPhone.filter((item) => search.digitalStatus === "UNKNOWN" || item.digitalStatus === search.digitalStatus);
+    const afterMinScore = afterDigitalStatus.filter((item) => item.score >= search.minScore);
+    const afterDedupe = deduplicateBusinesses(afterMinScore).filter((item) => !store.prospectBusinesses.some((existing) => existing.discarded && ((item.normalizedPhone && existing.normalizedPhone === item.normalizedPhone) || (existing.normalizedName === item.normalizedName && existing.city.toLocaleLowerCase("pt-BR") === item.city.toLocaleLowerCase("pt-BR") && existing.state.toUpperCase() === item.state.toUpperCase())))).slice(0, search.quantity);
+    const diagnostics = { geoapifyKeyLoaded: Boolean(env.GEOAPIFY_API_KEY), providersSelected: providers.map((provider) => provider.getProviderName()), rawGeoapify, afterState: afterState.length, afterCity: afterCity.length, afterDistrict: afterDistrict.length, afterNiche: afterNiche.length, afterPhone: afterPhone.length, afterDigitalStatus: afterDigitalStatus.length, afterMinScore: afterMinScore.length, afterDedupe: afterDedupe.length };
+    search.diagnostics = diagnostics;
+    searchLog(search.id, "search_stage_counts", diagnostics);
+    const normalized = afterDedupe;
     for (const item of normalized) {
       if (search.status === "CANCELLED") return;
       const business = toBusiness(search.id, item);
       store.persistProspectBusiness(business);
     }
-    search.progress =
-      normalized.length >= search.quantity
-        ? 100
-        : Math.min(
-            99,
-            Math.round(
-              (normalized.length / Math.max(1, search.quantity)) * 100,
-            ),
-          );
+    search.progress = 100;
     if (providerErrors.length)
       search.errorMessage = `Resultados parciais: ${providerErrors.join("; ")}`;
     search.status = normalized.length || !providerErrors.length ? "COMPLETED" : "FAILED";
@@ -695,6 +680,7 @@ export async function runSearch(search: ProspectSearch, store: MemoryStore) {
         "Nenhuma empresa válida com telefone foi encontrada.";
     store.persistProspectSearch(search);
   } catch (error) {
+    searchLog(search.id, "search_error", { message: error instanceof Error ? error.message : "Falha na busca." });
     search.status = "FAILED";
     search.errorMessage =
       error instanceof Error ? error.message : "Falha na busca.";

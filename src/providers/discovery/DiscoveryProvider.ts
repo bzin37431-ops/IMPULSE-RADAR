@@ -21,7 +21,7 @@ export type DiscoveryBusiness = {
   rating?: number;
   reviewsCount?: number;
 };
-export type DiscoveryQuery = { state: string; city: string; district?: string; niche: string; quantity: number; digitalStatus?: string; coverageMode?: string };
+export type DiscoveryQuery = { state: string; city: string; district?: string; niche: string; quantity: number; digitalStatus?: string; coverageMode?: string; searchId?: string };
 export type ProviderRateLimit = { requestsPerMinute?: number; configured: boolean };
 export interface DiscoveryProvider {
   searchBusinesses(query: DiscoveryQuery): Promise<DiscoveryBusiness[]>;
