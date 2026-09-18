@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { del, get, patch } from "../services/api";
+import { del, get, patch, post } from "../services/api";
 const digitalLabels: Record<string, string> = {
   UNKNOWN: "Todos",
   NO_WEBSITE_FOUND: "Sem site",
@@ -26,6 +26,7 @@ type Business = {
   opportunityScore: number;
   scoreBreakdown?: Record<string, number>;
   sourceProviders?: string[];
+  verifiedAt?: string;
 };
 type Status =
   | "NOVO"
@@ -129,6 +130,19 @@ export function SavedLayouts() {
     await del(`/api/prospecting/saved-layouts/${id}`);
     setItems((v) => v.filter((i) => i.id !== id));
     setSelected(undefined);
+  };
+  const reverify = async (item: Layout) => {
+    const response = await post<{ data: Business }>(
+      `/api/prospecting/businesses/${item.business.id}/reverify`,
+    );
+    setItems((current) =>
+      current.map((layout) =>
+        layout.id === item.id ? { ...layout, business: response.data } : layout,
+      ),
+    );
+    setSelected((current) =>
+      current?.id === item.id ? { ...current, business: response.data } : current,
+    );
   };
   return (
     <section className="saved-layouts">
@@ -287,13 +301,21 @@ export function SavedLayouts() {
                 dados confirmados.
               </p>
             </div>
-            <div className="drawer-section">
-              <label>CONTATO</label>
+              <div className="drawer-section">
+                <label>CONTATO</label>
               <b>{selected.business.phone || "Não localizado"}</b>
               <b>
                 {selected.business.address ||
                   `${selected.business.city}, ${selected.business.state}`}
               </b>
+              </div>
+            <div className="drawer-section">
+              <label>LOCALIZAÇÃO</label>
+              <b>{selected.business.address || "Endereço não informado"}</b>
+              <small>
+                {selected.business.district ? `${selected.business.district} · ` : ""}
+                {selected.business.city}, {selected.business.state}
+              </small>
             </div>
             <div className="drawer-section">
               <label>PRESENÇA DIGITAL</label>
@@ -328,6 +350,17 @@ export function SavedLayouts() {
                 {selected.business.sourceProviders?.join(", ") ||
                   "Fonte não informada"}
               </p>
+            </div>
+            <div className="drawer-section">
+              <label>VERIFICAÇÃO</label>
+              <p>
+                {selected.business.verifiedAt
+                  ? `Verificado em ${new Date(selected.business.verifiedAt).toLocaleString("pt-BR")}`
+                  : "Ainda não verificado"}
+              </p>
+              <button className="ghost" onClick={() => void reverify(selected)}>
+                Reverificar presença digital
+              </button>
             </div>
             <div className="drawer-section">
               <label>STATUS COMERCIAL</label>

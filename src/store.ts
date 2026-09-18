@@ -139,6 +139,7 @@ export class MemoryStore {
       saveTask?(task: StoredTask): Promise<unknown>;
       deleteLead?(id: string): Promise<unknown>;
       saveProspectSearch?(item: ProspectSearch): Promise<unknown>;
+      deleteProspectSearch?(id: string): Promise<unknown>;
       saveProspectBusiness?(item: ProspectBusiness): Promise<unknown>;
       saveSavedLayout?(item: SavedLayout): Promise<unknown>;
       deleteSavedLayout?(id: string): Promise<unknown>;
@@ -341,6 +342,19 @@ export class MemoryStore {
     if (index >= 0) this.prospectingSearches[index] = search;
     else this.prospectingSearches.push(search);
     void this.persistence?.saveProspectSearch?.(search).catch(() => undefined);
+  }
+  deleteProspectSearch(id: string) {
+    const exists = this.prospectingSearches.some((item) => item.id === id);
+    if (!exists) return false;
+    this.prospectingSearches = this.prospectingSearches.filter(
+      (item) => item.id !== id,
+    );
+    this.prospectBusinesses = this.prospectBusinesses.filter(
+      (item) => item.searchId !== id,
+    );
+    this.savedLayouts = this.savedLayouts.filter((item) => item.searchId !== id);
+    void this.persistence?.deleteProspectSearch?.(id).catch(() => undefined);
+    return true;
   }
   persistProspectBusiness(business: ProspectBusiness) {
     const index = this.prospectBusinesses.findIndex(

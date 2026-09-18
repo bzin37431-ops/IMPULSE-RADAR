@@ -415,6 +415,7 @@ export class PrismaPersistence {
     await this.prisma.prospectingSearch.upsert({
       where: { id: item.id },
       update: {
+        userId: item.userId,
         status: item.status as never,
         progress: item.progress,
         providersConsulted: item.providersConsulted,
@@ -434,6 +435,7 @@ export class PrismaPersistence {
       },
       create: {
         id: item.id,
+        userId: item.userId,
         state: item.state,
         city: item.city,
         district: item.district,
@@ -462,6 +464,9 @@ export class PrismaPersistence {
         resultsCount: item.resultsCount,
       },
     });
+  }
+  async deleteProspectSearch(id: string) {
+    await this.prisma.prospectingSearch.delete({ where: { id } });
   }
   async saveProspectBusiness(item: ProspectBusiness) {
     await this.prisma.prospectBusiness.upsert({

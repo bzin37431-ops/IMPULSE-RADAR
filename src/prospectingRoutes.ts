@@ -265,6 +265,15 @@ export function registerProspectingRoutes(
       ),
     };
   });
+  app.delete("/api/prospecting/searches/:id", async (request) => {
+    assertCan(request);
+    const id = (request.params as { id: string }).id;
+    if (!store.deleteProspectSearch(id))
+      throw Object.assign(new Error("Busca não encontrada."), {
+        statusCode: 404,
+      });
+    return { ok: true };
+  });
   app.post("/api/prospecting/searches", async (request) => {
     assertCan(request);
     const body = z
@@ -417,6 +426,63 @@ export function registerProspectingRoutes(
     store.persistProspectBusiness(item);
     return { data: item };
   });
+  app.post("/api/prospecting/businesses/bulk", async (request) => {
+    assertCan(request);
+    const body = z
+      .object({
+        ids: z.array(z.string()).min(1).max(500),
+        action: z.enum(["SAVE", "DISCARD"]),
+        discardReason: z.string().max(500).optional(),
+      })
+      .parse(request.body);
+    const businesses = body.ids
+      .map((id) => store.prospectBusinesses.find((item) => item.id === id))
+      .filter((item): item is ProspectBusiness => Boolean(item));
+    let saved = 0;
+    let alreadySaved = 0;
+    let discarded = 0;
+    for (const item of businesses) {
+      if (body.action === "DISCARD") {
+        item.discarded = true;
+        item.discardReason = body.discardReason;
+        item.updatedAt = new Date().toISOString();
+        store.persistProspectBusiness(item);
+        discarded += 1;
+        continue;
+      }
+      if (store.savedLayouts.some((layout) => layout.prospectBusinessId === item.id)) {
+        alreadySaved += 1;
+        continue;
+      }
+      const now = new Date().toISOString();
+      store.persistSavedLayout({
+        id: crypto.randomUUID(),
+        prospectBusinessId: item.id,
+        searchId: item.searchId,
+        savedAt: now,
+        savedBy: String(request.headers["x-user-id"] || "anonymous"),
+        commercialStatus: "NOVO",
+        createdAt: now,
+        updatedAt: now,
+      });
+      saved += 1;
+    }
+    return { data: { requested: body.ids.length, matched: businesses.length, saved, alreadySaved, discarded } };
+  });
+  app.post("/api/prospecting/businesses/:id/reverify", async (request) => {
+    assertCan(request);
+    const item = store.prospectBusinesses.find(
+      (value) => value.id === (request.params as { id: string }).id,
+    );
+    if (!item)
+      throw Object.assign(new Error("Oportunidade não encontrada."), {
+        statusCode: 404,
+      });
+    item.verifiedAt = new Date().toISOString();
+    item.updatedAt = item.verifiedAt;
+    store.persistProspectBusiness(item);
+    return { data: item, providerChecked: false };
+  });
   app.post("/api/prospecting/businesses/:id/save-lead", async (request) => {
     assertCan(request);
     const item = store.prospectBusinesses.find(
@@ -531,6 +597,19 @@ export async function runSearch(search: ProspectSearch, store: MemoryStore) {
       )
       .filter((item) => isNicheRelevant(item.name, item.category, search.niche))
       .filter((item) => demo || Boolean(item.normalizedPhone))
+      .filter(
+        (item) =>
+          !store.prospectBusinesses.some(
+            (existing) =>
+              existing.discarded &&
+              ((item.normalizedPhone &&
+                existing.normalizedPhone === item.normalizedPhone) ||
+                (existing.normalizedName === item.normalizedName &&
+                  existing.city.toLocaleLowerCase("pt-BR") ===
+                    item.city.toLocaleLowerCase("pt-BR") &&
+                  existing.state.toUpperCase() === item.state.toUpperCase())),
+          ),
+      )
       .filter((item) => item.score >= search.minScore)
       .filter(
         (item) =>

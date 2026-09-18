@@ -8,7 +8,7 @@ export const searchModeLabel = (value: string) =>
 export const searchStatusLabel = (value: string) =>
   (
     ({
-      QUEUED: "Na fila",
+      QUEUED: "Em andamento",
       RUNNING: "Em andamento",
       COMPLETED: "Concluída",
       FAILED: "Falhou",

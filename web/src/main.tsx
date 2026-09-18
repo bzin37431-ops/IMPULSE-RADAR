@@ -1180,6 +1180,11 @@ function SearchHistory() {
       setData(result.data),
     );
   }, []);
+  const remove = async (id: string) => {
+    if (!window.confirm("Excluir esta busca e seus resultados?")) return;
+    await del(`/api/prospecting/searches/${id}`);
+    setData((items) => items.filter((item) => item.id !== id));
+  };
   return (
     <>
       <section className="hero-row">
@@ -1239,6 +1244,14 @@ function SearchHistory() {
                       }
                     >
                       Tentar novamente
+                    </button>
+                  )}
+                  {!['QUEUED', 'RUNNING'].includes(item.status) && (
+                    <button
+                      className="table-action"
+                      onClick={() => void remove(item.id)}
+                    >
+                      Excluir histórico
                     </button>
                   )}
                 </td>

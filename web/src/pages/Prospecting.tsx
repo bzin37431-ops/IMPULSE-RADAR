@@ -190,6 +190,7 @@ export function Prospecting({
     [search, setSearch] = useState<Search>(),
     [results, setResults] = useState<Business[]>([]),
     [selectedId, setSelectedId] = useState<string>(),
+    [selectedIds, setSelectedIds] = useState<string[]>([]),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   useEffect(() => {
@@ -308,6 +309,28 @@ export function Prospecting({
   };
   const cancel = async () => {
     if (search) await post(`/api/prospecting/searches/${search.id}/cancel`);
+  };
+  const bulk = async (action: "SAVE" | "DISCARD") => {
+    if (!selectedIds.length) return;
+    try {
+      const response = await post<{ data: { saved: number; alreadySaved: number; discarded: number } }>(
+        "/api/prospecting/businesses/bulk",
+        { ids: selectedIds, action },
+      );
+      if (action === "DISCARD")
+        setResults((items) => items.filter((item) => !selectedIds.includes(item.id)));
+      setSelectedIds([]);
+      notify({
+        kind: "success",
+        title: action === "SAVE" ? "Layouts salvos" : "Oportunidades descartadas",
+        description:
+          action === "SAVE"
+            ? `${response.data.saved} novos · ${response.data.alreadySaved} já salvos.`
+            : `${response.data.discarded} oportunidades removidas dos resultados.`,
+      });
+    } catch (e: any) {
+      notify({ kind: "error", title: "Ação em massa indisponível", description: e.message });
+    }
   };
   const save = async (item: Business) => {
     try {
@@ -528,6 +551,17 @@ export function Prospecting({
                 foram encontradas mais oportunidades compatíveis.
               </p>
             )}
+          {results.length > 0 && (
+            <div className="prospect-bulk-actions">
+              <span>{selectedIds.length} selecionadas</span>
+              <button className="ghost" disabled={!selectedIds.length} onClick={() => void bulk("SAVE")}>
+                Salvar selecionadas
+              </button>
+              <button className="danger" disabled={!selectedIds.length} onClick={() => void bulk("DISCARD")}>
+                Descartar selecionadas
+              </button>
+            </div>
+          )}
           {!results.length && search.status === "COMPLETED" ? (
             <div className="panel empty">
               <h2>Nenhuma oportunidade encontrada com estes filtros.</h2>
@@ -544,6 +578,20 @@ export function Prospecting({
                   >
                     <div className="prospect-card-top">
                       <div>
+                        <label className="prospect-select" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.includes(item.id)}
+                            onChange={(e) =>
+                              setSelectedIds((ids) =>
+                                e.target.checked
+                                  ? [...ids, item.id]
+                                  : ids.filter((id) => id !== item.id),
+                              )
+                            }
+                          />
+                          Selecionar
+                        </label>
                         <h3>{item.name}</h3>
                         <small>
                           {item.category} · {item.city}
