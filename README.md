@@ -25,6 +25,10 @@ Crie um Meta Developer App com o produto WhatsApp e configure `META_ACCESS_TOKEN
 
 `TEST_MODE=true` usa `MockWhatsAppProvider`, nunca chama a Meta e é indicado para desenvolvimento. Não há fallback para WhatsApp Web, QR code, Selenium, Playwright, Baileys ou outras APIs não oficiais.
 
+## Geoapify Discovery
+
+A descoberta real usa Geoapify Places API e Geocoding API no backend. Configure `DISCOVERY_MODE=real`, `DISCOVERY_TEST_MODE=false` e `GEOAPIFY_API_KEY` como segredo do servidor (localmente no `.env`; em produção, nas variáveis do serviço). Nunca use `VITE_GEOAPIFY_API_KEY`: a chave não é enviada ao navegador. O modo real não usa `MockDiscoveryProvider`; empresas sem telefone retornado pela fonte são descartadas e não são substituídas por dados fictícios. Google Places permanece opcional.
+
 ## Operação
 
 O backend cobre leads, duplicidade por telefone/empresa/Instagram, pipeline, timeline, notas, consentimento, opt-out, importação, exportação CSV/JSON, conversas, janela de 24h, templates, endpoint público de leads, health check, controles de fila e pausa de emergência. Envio usa idempotency key, fila com concorrência limitada e circuit breaker; opt-out bloqueia automaticamente a operação. O schema Prisma PostgreSQL contém User, Lead, LeadNote, LeadHistory, Conversation, Message, Campaign, CampaignRecipient, Template, Consent, OptOut, Task, WebhookEvent, AuditLog e SystemSetting.

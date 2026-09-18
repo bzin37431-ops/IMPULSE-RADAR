@@ -602,6 +602,7 @@ export async function runSearch(search: ProspectSearch, store: MemoryStore) {
               niche: search.niche,
               quantity: search.quantity,
               digitalStatus: search.digitalStatus,
+              coverageMode: search.coverageMode,
             }),
             10000,
           );
@@ -631,6 +632,10 @@ export async function runSearch(search: ProspectSearch, store: MemoryStore) {
       .filter(
         (item) =>
           item.state.trim().toUpperCase() === search.state.trim().toUpperCase(),
+      )
+      .filter(
+        (item) => !search.district || search.district === "Toda a cidade" ||
+          item.district?.trim().toLocaleLowerCase("pt-BR") === search.district.trim().toLocaleLowerCase("pt-BR"),
       )
       .filter((item) => isNicheRelevant(item.name, item.category, search.niche))
       .filter((item) => demo || Boolean(item.normalizedPhone))
