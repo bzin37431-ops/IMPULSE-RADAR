@@ -8,11 +8,11 @@ export class ProspectingQueue {
   private worker?: Worker<{ searchId:string }>;
   private connection?: Redis;
   constructor(private store: MemoryStore) {
-    if (!env.REDIS_URL) return;
+    if (!env.REDIS_URL || process.env.VERCEL) return;
     this.connection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
     this.queue = new Queue('impulse-prospecting-search', { connection: this.connection });
     this.worker = new Worker('impulse-prospecting-search', async (job) => { const search=this.store.prospectingSearches.find(item=>item.id===job.data.searchId); if(search) await runSearch(search,this.store); }, { connection: this.connection, concurrency: 2 });
   }
-  async enqueue(search: ProspectSearch) { if (this.queue && search.quantity >= 100) { await this.queue.add('discover', { searchId:search.id }, { jobId:search.id, attempts:3, backoff:{ type:'exponential', delay:1000 }, removeOnComplete:100, removeOnFail:100 }); return; } void runSearch(search,this.store); }
+  async enqueue(search: ProspectSearch) { if (this.queue && search.quantity >= 100) { await this.queue.add('discover', { searchId:search.id }, { jobId:search.id, attempts:3, backoff:{ type:'exponential', delay:1000 }, removeOnComplete:100, removeOnFail:100 }); return; } if (process.env.VERCEL) { await runSearch(search,this.store); return; } void runSearch(search,this.store); }
   async close() { await this.worker?.close(); await this.queue?.close(); await this.connection?.quit(); }
 }
