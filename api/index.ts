@@ -1,3 +1,4 @@
+// Impulse Radar Vercel API runtime entrypoint.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { env, databaseUrl, assertRadarRuntime } from '../src/config.js';
 import { buildApp } from '../src/app.js';
