@@ -1,0 +1,5 @@
+ALTER TABLE "Lead" ADD COLUMN "nextFollowUpAt" TIMESTAMP(3);
+ALTER TABLE "Lead" ADD COLUMN "lastContactAt" TIMESTAMP(3);
+ALTER TABLE "Lead" ADD COLUMN "siteModelSent" TEXT;
+ALTER TABLE "Lead" ADD COLUMN "proposedValue" DECIMAL(12,2);
+ALTER TABLE "Lead" ADD COLUMN "proposalDate" TIMESTAMP(3);

@@ -1,0 +1,4 @@
+import React,{useEffect} from 'react';
+export type ToastState={kind:'success'|'info'|'warning'|'error';title:string;description?:string};
+export function Toast({toast,close}:{toast:ToastState;close:()=>void}){useEffect(()=>{const timer=window.setTimeout(close,5000);return()=>window.clearTimeout(timer)},[toast,close]);return <div className={`toast ${toast.kind}`} role="status"><b>{toast.kind==='success'?'✓':toast.kind==='error'?'!':toast.kind==='warning'?'⚠':'i'} {toast.title}</b>{toast.description&&<span>{toast.description}</span>}<button onClick={close} aria-label="Fechar aviso">×</button></div>}
+export function Modal({title,children,onClose}:{title:string;children:React.ReactNode;onClose:()=>void}){return <div className="modal-backdrop" onClick={onClose}><div className="modal" onClick={e=>e.stopPropagation()}><button className="close" onClick={onClose} aria-label="Fechar">×</button><h2>{title}</h2>{children}</div></div>}

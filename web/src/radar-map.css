@@ -1,0 +1,9 @@
+.real-map{height:520px;min-height:420px;width:100%;background:#c8d7c9}
+.real-map .maplibregl-canvas{display:block}
+.maplibregl-ctrl-group{background:#111;border:1px solid #39433d}
+.maplibregl-ctrl-group button{filter:invert(1)}
+.prospect-card.selected{border-color:#7cc795;box-shadow:0 0 0 1px #7cc795}
+.demo-badge{display:inline-block;margin-top:9px;padding:5px 8px;border:1px solid #548d68;border-radius:999px;color:#a9d6bc;font:600 10px 'DM Mono';letter-spacing:.08em}
+.partial-results{margin:0 0 16px;color:#e9c991;font-size:12px}
+.prospect-split{grid-template-columns:minmax(0,45%) minmax(0,55%)}
+@media(max-width:1050px){.prospect-split{grid-template-columns:1fr}}

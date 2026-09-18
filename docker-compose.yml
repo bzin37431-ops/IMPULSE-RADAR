@@ -1,0 +1,32 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: impulse
+      POSTGRES_PASSWORD: impulse
+      POSTGRES_DB: impulse
+    ports: ["5432:5432"]
+    volumes: ["impulse_postgres:/var/lib/postgresql/data"]
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DATABASE_URL: postgresql://impulse:impulse@postgres:5432/impulse?schema=public
+      REDIS_URL: redis://redis:6379
+      PROVIDER_MODE: meta-cloud-api
+      TEST_MODE: "true"
+      JWT_SECRET: ${JWT_SECRET:-local-development-only-change-me}
+      CORS_ORIGIN: http://localhost:3000
+    depends_on:
+      - postgres
+      - redis
+    ports: ["3000:3000"]
+    command: ["sh", "-c", "npx prisma migrate deploy && node dist/src/server.js"]
+volumes:
+  impulse_postgres:
