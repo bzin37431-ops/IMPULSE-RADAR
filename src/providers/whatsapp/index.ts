@@ -7,7 +7,7 @@ export interface WhatsAppProvider {
   sendTemplate(input: SendInput): Promise<ProviderResult>; sendText(input: SendInput): Promise<ProviderResult>; sendImage(input: SendInput): Promise<ProviderResult>; sendDocument(input: SendInput): Promise<ProviderResult>; sendInteractive(input: SendInput): Promise<ProviderResult>;
   getTemplates(): Promise<unknown[]>; getTemplateStatus(name: string): Promise<unknown>; markAsRead(messageId: string): Promise<void>; processWebhook(payload: unknown): Promise<void>; validateWebhookSignature(raw: Buffer, signature?: string): boolean; getMedia(mediaId: string): Promise<unknown>; getPhoneInfo(): Promise<unknown>;
 }
-export class OfficialApiGuard { constructor() { assertOfficialProvider(); } assert() { if (configuredProvider() !== 'meta-cloud-api') throw new Error('Provider não autorizado. Configure a WhatsApp Cloud API oficial.'); } }
+export class OfficialApiGuard { constructor() {} assert() { assertOfficialProvider(); } }
 export class MockWhatsAppProvider implements WhatsAppProvider {
   private result(): ProviderResult { return { providerMessageId: `mock-${crypto.randomUUID()}`, status: 'SENT' }; }
   async sendTemplate() { return this.result(); } async sendText() { return this.result(); } async sendImage() { return this.result(); } async sendDocument() { return this.result(); } async sendInteractive() { return this.result(); }
@@ -30,4 +30,4 @@ export class MetaCloudApiProvider implements WhatsAppProvider {
   async getPhoneInfo() { const response = await fetch(`${this.base}/${env.META_PHONE_NUMBER_ID}?fields=display_phone_number,verified_name,quality_rating`, { headers: this.headers() }); return response.json(); }
   validateWebhookSignature(raw: Buffer, signature?: string) { if (!env.META_APP_SECRET || !signature) return false; const expected = 'sha256=' + crypto.createHmac('sha256', env.META_APP_SECRET).update(raw).digest('hex'); return expected.length === signature.length && crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature)); }
 }
-export function createProvider(): WhatsAppProvider { if (env.NODE_ENV === 'production' && env.TEST_MODE) throw new Error('Production cannot run with TEST_MODE=true.'); return env.TEST_MODE ? new MockWhatsAppProvider() : new MetaCloudApiProvider(); }
+export function createProvider(): WhatsAppProvider { return env.TEST_MODE ? new MockWhatsAppProvider() : new MetaCloudApiProvider(); }

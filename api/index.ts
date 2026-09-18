@@ -1,5 +1,6 @@
+// Impulse Radar Vercel API runtime entrypoint.
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { env, databaseUrl, assertOfficialProvider } from '../src/config.js';
+import { env, databaseUrl, assertRadarRuntime } from '../src/config.js';
 import { buildApp } from '../src/app.js';
 import { PrismaPersistence } from '../src/persistence.js';
 import { MemoryStore } from '../src/store.js';
@@ -8,7 +9,7 @@ type VercelRequest = IncomingMessage & { url?: string };
 type VercelResponse = ServerResponse;
 
 async function createApp() {
-  assertOfficialProvider();
+  assertRadarRuntime();
 
   const persistence = databaseUrl ? new PrismaPersistence() : undefined;
   const store = new MemoryStore(env.TEST_MODE, persistence);
@@ -27,7 +28,11 @@ async function createApp() {
   return app;
 }
 
-const appPromise = createApp();
+let appPromise: ReturnType<typeof createApp> | undefined;
+function getApp() {
+  appPromise ??= createApp();
+  return appPromise;
+}
 
 function restoreApiPath(req: VercelRequest) {
   const currentUrl = req.url || '/api';
@@ -49,7 +54,7 @@ function restoreApiPath(req: VercelRequest) {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     restoreApiPath(req);
-    const app = await appPromise;
+    const app = await getApp();
 
     await new Promise<void>((resolve, reject) => {
       const cleanup = () => {
