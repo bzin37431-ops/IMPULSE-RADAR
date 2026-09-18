@@ -21,6 +21,7 @@ type Page =
   | "search-history"
   | "integrations"
   | "account";
+const pageFromHash = () => (location.hash.slice(1).split("?")[0] || "prospecting") as Page;
 const nav: [Page, string, string][] = [
   ["prospecting", "Buscar Layouts", "⌕"],
   ["dashboard", "Visão Geral", "⌂"],
@@ -32,7 +33,7 @@ const nav: [Page, string, string][] = [
 ];
 function App() {
   const [page, setPage] = useState<Page>(
-    (location.hash.slice(1) || "prospecting") as Page,
+    pageFromHash(),
   );
   const [leads, setLeads] = useState<Lead[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -43,7 +44,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   useEffect(() => {
-    const f = () => setPage((location.hash.slice(1) || "prospecting") as Page);
+    const f = () => setPage(pageFromHash());
     addEventListener("hashchange", f);
     return () => removeEventListener("hashchange", f);
   }, []);
@@ -1223,7 +1224,7 @@ function SearchHistory() {
                     className="table-action"
                     onClick={() => {
                       sessionStorage.setItem("impulse.reopenSearchId", item.id);
-                      location.hash = "prospecting";
+                      location.hash = `prospecting?searchId=${encodeURIComponent(item.id)}`;
                     }}
                   >
                     Ver resultados
@@ -1239,7 +1240,7 @@ function SearchHistory() {
                             "impulse.reopenSearchId",
                             result.data.id,
                           );
-                          location.hash = "prospecting";
+                          location.hash = `prospecting?searchId=${encodeURIComponent(result.data.id)}`;
                         })
                       }
                     >

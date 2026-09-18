@@ -225,7 +225,10 @@ export function Prospecting({
     }
   }, [state, states]);
   useEffect(() => {
-    const id = sessionStorage.getItem("impulse.reopenSearchId");
+    const hashQuery = location.hash.split("?")[1] || "";
+    const id =
+      new URLSearchParams(hashQuery).get("searchId") ||
+      sessionStorage.getItem("impulse.reopenSearchId");
     if (!id) return;
     sessionStorage.removeItem("impulse.reopenSearchId");
     get<{ search: Search; data: Business[] }>(`/api/prospecting/searches/${id}`)
