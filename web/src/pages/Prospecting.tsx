@@ -57,6 +57,104 @@ const digitalLabels = {
   SOCIAL_ONLY: "Só rede social",
   HAS_WEBSITE: "Com site",
 } as Record<string, string>;
+function ComboBox({
+  label,
+  value,
+  options,
+  onChange,
+  required,
+  loading = false,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (value: string) => void;
+  required?: boolean;
+  loading?: boolean;
+  placeholder: string;
+}) {
+  const [open, setOpen] = useState(false),
+    [query, setQuery] = useState(value),
+    [active, setActive] = useState(0);
+  const filtered = options
+    .filter((item) =>
+      item
+        .toLocaleLowerCase("pt-BR")
+        .includes(query.toLocaleLowerCase("pt-BR")),
+    )
+    .sort((a, b) => a.localeCompare(b, "pt-BR"))
+    .slice(0, 200);
+  useEffect(() => setQuery(value), [value]);
+  return (
+    <label className="combo-label">
+      {label}
+      <div className="combo-box">
+        <input
+          required={required}
+          value={query}
+          placeholder={placeholder}
+          onFocus={() => setOpen(true)}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            onChange(e.target.value);
+            setActive(0);
+            setOpen(true);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowDown") {
+              e.preventDefault();
+              setActive((index) => Math.min(index + 1, filtered.length - 1));
+            } else if (e.key === "ArrowUp") {
+              e.preventDefault();
+              setActive((index) => Math.max(index - 1, 0));
+            } else if (e.key === "Enter" && filtered[active]) {
+              e.preventDefault();
+              onChange(filtered[active]);
+              setQuery(filtered[active]);
+              setOpen(false);
+            } else if (e.key === "Escape") setOpen(false);
+          }}
+        />
+        <button
+          type="button"
+          className="combo-toggle"
+          onClick={() => setOpen((current) => !current)}
+          aria-label={`Abrir opções de ${label}`}
+        >
+          ⌄
+        </button>
+        {open && (
+          <div className="combo-options" role="listbox">
+            {loading ? (
+              <div className="combo-empty">Carregando…</div>
+            ) : filtered.length ? (
+              filtered.map((item, index) => (
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={index === active}
+                  className={index === active ? "active" : ""}
+                  key={item}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    onChange(item);
+                    setQuery(item);
+                    setOpen(false);
+                  }}
+                >
+                  {item}
+                </button>
+              ))
+            ) : (
+              <div className="combo-empty">Nenhuma opção encontrada.</div>
+            )}
+          </div>
+        )}
+      </div>
+    </label>
+  );
+}
 export function Prospecting({
   notify,
 }: {
@@ -124,6 +222,17 @@ export function Prospecting({
     }
   }, [state, states]);
   useEffect(() => {
+    const id = sessionStorage.getItem("impulse.reopenSearchId");
+    if (!id) return;
+    sessionStorage.removeItem("impulse.reopenSearchId");
+    get<{ search: Search; data: Business[] }>(`/api/prospecting/searches/${id}`)
+      .then((data) => {
+        setSearch(data.search);
+        setResults(data.data);
+      })
+      .catch((e) => setError(e.message));
+  }, []);
+  useEffect(() => {
     if (city && state) {
       get<{ data: string[] }>("/api/prospecting/districts", { state, city })
         .then((data) => setDistricts(data.data))
@@ -165,6 +274,19 @@ export function Prospecting({
         minScore,
         quantity,
         coverageMode,
+        idempotencyKey: [
+          state,
+          city,
+          district,
+          niche,
+          level,
+          digitalStatus,
+          minScore,
+          quantity,
+          coverageMode,
+        ]
+          .join("|")
+          .toLowerCase(),
       });
       setSearch(data.data);
       setResults([]);
@@ -190,19 +312,19 @@ export function Prospecting({
   const save = async (item: Business) => {
     try {
       const response: any = await post(
-        `/api/prospecting/businesses/${item.id}/save-lead`,
+        `/api/prospecting/businesses/${item.id}/save-layout`,
       );
       notify({
         kind: response.duplicate ? "warning" : "success",
         title: response.duplicate ? "Layout já existente" : "Layout salvo",
         description: response.duplicate
           ? "A oportunidade já está no CRM."
-          : "Disponível em Meus Layouts.",
+          : "Persistido no PostgreSQL e disponível em Meus Layouts.",
       });
     } catch (e: any) {
       notify({
         kind: "error",
-        title: "Falha ao salvar lead",
+        title: "Falha ao salvar layout",
         description: e.message,
       });
     }
@@ -239,68 +361,43 @@ export function Prospecting({
           </span>
         </div>
         <div className="form-grid prospect-grid">
-          <label>
-            Estado
-            <input
-              required
-              list="prospect-states"
-              value={state}
-              onChange={(e) => {
-                setState(e.target.value);
-                setCity("");
-              }}
-              placeholder="Digite para filtrar"
-            />
-            <datalist id="prospect-states">
-              {states.map((item) => (
-                <option key={item.uf} value={item.name} />
-              ))}
-            </datalist>
-          </label>
-          <label>
-            Cidade
-            <input
-              required
-              list="prospect-cities"
-              value={city}
-              onChange={(e) => setCity(e.target.value)}
-              placeholder="Digite para filtrar"
-            />
-            <datalist id="prospect-cities">
-              {cities.map((item) => (
-                <option key={item} value={item} />
-              ))}
-            </datalist>
-          </label>
-          <label>
-            Região / Bairro
-            <select
-              value={district}
-              onChange={(e) => setDistrict(e.target.value)}
-            >
-              <option value="Toda a cidade">Toda a cidade</option>
-              {districts
-                .filter((item) => item !== "Toda a cidade")
-                .map((item) => (
-                  <option key={item}>{item}</option>
-                ))}
-            </select>
-          </label>
-          <label>
-            Nicho
-            <input
-              required
-              list="prospect-niches"
-              value={niche}
-              onChange={(e) => setNiche(e.target.value)}
-              placeholder="Digite para filtrar"
-            />
-            <datalist id="prospect-niches">
-              {niches.map((item) => (
-                <option key={item} value={item} />
-              ))}
-            </datalist>
-          </label>
+          <ComboBox
+            label="Estado"
+            required
+            value={state}
+            options={states.map((item) => item.name)}
+            onChange={(value) => {
+              setState(value);
+              setCity("");
+            }}
+            placeholder="Digite para filtrar"
+          />
+          <ComboBox
+            label="Cidade"
+            required
+            value={city}
+            options={cities}
+            onChange={setCity}
+            placeholder="Digite para filtrar"
+            loading={Boolean(state) && !cities.length}
+          />
+          <ComboBox
+            label="Região / Bairro"
+            value={district}
+            options={districts.length ? districts : ["Toda a cidade"]}
+            onChange={setDistrict}
+            placeholder="Toda a cidade"
+            loading={Boolean(city) && !districts.length}
+          />
+          <ComboBox
+            label="Nicho"
+            required
+            value={niche}
+            options={niches}
+            onChange={setNiche}
+            placeholder="Digite para filtrar"
+            loading={!niches.length}
+          />
         </div>
         <div className="prospect-divider" />
         <div className="panel-title">

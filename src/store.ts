@@ -1,6 +1,17 @@
-import { Lead, History, Message, LeadStatus, now, normalizePhone, PIPELINE } from './domain.js';
+import {
+  Lead,
+  History,
+  Message,
+  LeadStatus,
+  now,
+  normalizePhone,
+  PIPELINE,
+} from "./domain.js";
 
-function groupBy<T>(values: T[], key: (value: T) => string): Record<string, T[]> {
+function groupBy<T>(
+  values: T[],
+  key: (value: T) => string,
+): Record<string, T[]> {
   return values.reduce<Record<string, T[]>>((groups, value) => {
     const name = key(value);
     (groups[name] ??= []).push(value);
@@ -8,47 +19,405 @@ function groupBy<T>(values: T[], key: (value: T) => string): Record<string, T[]>
   }, {});
 }
 
-export type StoredCampaign = { id: string; name: string; templateName: string; segment: Record<string, string>; status: string; createdAt: string; scheduledAt?: string; createdBy: string; recipientIds: string[] };
-export type StoredTask = { id: string; leadId: string; title: string; description?: string; dueDate?: string; assignedTo?: string; completed: boolean; createdAt: string };
-export type ProspectSearch = { id:string; state:string; city:string; district?:string; niche:string; sourceMode:string; digitalStatus:string; minScore:number; quantity:number; coverageMode:string; status:string; progress:number; providersConsulted:number; uniqueResults:number; noWebsiteCount:number; socialOnlyCount:number; websiteCount:number; errorMessage?:string; createdAt:string; startedAt?:string; completedAt?:string; cancelledAt?:string; resultsCount:number };
-export type ProspectBusiness = { id:string; searchId:string; externalIds?:Record<string,string>; name:string; normalizedName:string; category?:string; phone?:string; normalizedPhone?:string; whatsapp?:string; email?:string; instagram?:string; facebook?:string; tiktok?:string; linkedin?:string; website?:string; domain?:string; mapsUrl?:string; address?:string; district?:string; city:string; state:string; postalCode?:string; latitude?:number; longitude?:number; rating?:number; reviewsCount?:number; digitalStatus:string; digitalStatusConfidence:string; opportunityScore:number; scoreBreakdown?:Record<string,number>; sourceProviders?:string[]; favorite:boolean; discarded:boolean; discardReason?:string; createdAt:string; updatedAt:string; verifiedAt?:string };
+export type StoredCampaign = {
+  id: string;
+  name: string;
+  templateName: string;
+  segment: Record<string, string>;
+  status: string;
+  createdAt: string;
+  scheduledAt?: string;
+  createdBy: string;
+  recipientIds: string[];
+};
+export type StoredTask = {
+  id: string;
+  leadId: string;
+  title: string;
+  description?: string;
+  dueDate?: string;
+  assignedTo?: string;
+  completed: boolean;
+  createdAt: string;
+};
+export type ProspectSearch = {
+  id: string;
+  userId?: string;
+  state: string;
+  city: string;
+  district?: string;
+  niche: string;
+  sourceMode: string;
+  digitalStatus: string;
+  minScore: number;
+  quantity: number;
+  coverageMode: string;
+  status: string;
+  progress: number;
+  providersConsulted: number;
+  uniqueResults: number;
+  noWebsiteCount: number;
+  socialOnlyCount: number;
+  websiteCount: number;
+  errorMessage?: string;
+  createdAt: string;
+  startedAt?: string;
+  lastHeartbeatAt?: string;
+  idempotencyKey?: string;
+  completedAt?: string;
+  cancelledAt?: string;
+  resultsCount: number;
+};
+export type ProspectBusiness = {
+  id: string;
+  searchId: string;
+  externalIds?: Record<string, string>;
+  name: string;
+  normalizedName: string;
+  category?: string;
+  phone?: string;
+  normalizedPhone?: string;
+  whatsapp?: string;
+  email?: string;
+  instagram?: string;
+  facebook?: string;
+  tiktok?: string;
+  linkedin?: string;
+  website?: string;
+  domain?: string;
+  mapsUrl?: string;
+  address?: string;
+  district?: string;
+  city: string;
+  state: string;
+  postalCode?: string;
+  latitude?: number;
+  longitude?: number;
+  rating?: number;
+  reviewsCount?: number;
+  digitalStatus: string;
+  digitalStatusConfidence: string;
+  opportunityScore: number;
+  scoreBreakdown?: Record<string, number>;
+  sourceProviders?: string[];
+  favorite: boolean;
+  discarded: boolean;
+  discardReason?: string;
+  createdAt: string;
+  updatedAt: string;
+  verifiedAt?: string;
+};
+export type SavedLayoutStatus =
+  | "NOVO"
+  | "PARA_ABORDAR"
+  | "ABORDADO"
+  | "AGUARDANDO_RESPOSTA"
+  | "INTERESSADO"
+  | "PROPOSTA"
+  | "FECHADO"
+  | "DESCARTADO";
+export type SavedLayout = {
+  id: string;
+  prospectBusinessId: string;
+  searchId: string;
+  savedAt: string;
+  savedBy?: string;
+  commercialStatus: SavedLayoutStatus;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+};
 
 export class MemoryStore {
-  constructor(testMode = true, private persistence?: { saveLead(lead: Lead): Promise<unknown>; saveHistory(item: History): Promise<unknown>; saveMessage(item: Message): Promise<unknown>; saveCampaign?(campaign: StoredCampaign): Promise<unknown>; saveTask?(task: StoredTask): Promise<unknown>; deleteLead?(id: string): Promise<unknown>; saveProspectSearch?(item: ProspectSearch): Promise<unknown>; saveProspectBusiness?(item: ProspectBusiness): Promise<unknown> }) { this.settings.testMode = testMode; }
+  constructor(
+    testMode = true,
+    private persistence?: {
+      saveLead(lead: Lead): Promise<unknown>;
+      saveHistory(item: History): Promise<unknown>;
+      saveMessage(item: Message): Promise<unknown>;
+      saveCampaign?(campaign: StoredCampaign): Promise<unknown>;
+      saveTask?(task: StoredTask): Promise<unknown>;
+      deleteLead?(id: string): Promise<unknown>;
+      saveProspectSearch?(item: ProspectSearch): Promise<unknown>;
+      saveProspectBusiness?(item: ProspectBusiness): Promise<unknown>;
+      saveSavedLayout?(item: SavedLayout): Promise<unknown>;
+      deleteSavedLayout?(id: string): Promise<unknown>;
+    },
+  ) {
+    this.settings.testMode = testMode;
+  }
   leads = new Map<string, Lead>();
   histories: History[] = [];
   messages: Message[] = [];
-  campaigns: Array<{ id: string; name: string; templateName: string; segment: Record<string, string>; status: string; createdAt: string; scheduledAt?: string; createdBy: string; recipientIds: string[] }> = [];
-  tasks: Array<{ id: string; leadId: string; title: string; description?: string; dueDate?: string; assignedTo?: string; completed: boolean; createdAt: string }> = [];
+  campaigns: Array<{
+    id: string;
+    name: string;
+    templateName: string;
+    segment: Record<string, string>;
+    status: string;
+    createdAt: string;
+    scheduledAt?: string;
+    createdBy: string;
+    recipientIds: string[];
+  }> = [];
+  tasks: Array<{
+    id: string;
+    leadId: string;
+    title: string;
+    description?: string;
+    dueDate?: string;
+    assignedTo?: string;
+    completed: boolean;
+    createdAt: string;
+  }> = [];
   prospectingSearches: ProspectSearch[] = [];
   prospectBusinesses: ProspectBusiness[] = [];
-  templates = [{ id: 'tpl-1', name: 'impulse_apresentacao', language: 'pt_BR', category: 'MARKETING', status: 'APPROVED', updatedAt: now() }];
-  settings = { provider: 'META WHATSAPP CLOUD API', providerMode: 'meta-cloud-api', connected: false, lastWebhook: null as string | null, lastQueueError: null as string | null, deadLetters: [] as Array<{ jobId: string; leadId: string; campaignId?: string; error?: string; attempts: number; failedAt: string }>, queuePaused: false, testMode: true, maxConcurrentRequests: 2, maxQueueSize: 1000, maxRetries: 3, retryBackoff: 1000, pauseOnFailureRate: .25 };
+  savedLayouts: SavedLayout[] = [];
+  templates = [
+    {
+      id: "tpl-1",
+      name: "impulse_apresentacao",
+      language: "pt_BR",
+      category: "MARKETING",
+      status: "APPROVED",
+      updatedAt: now(),
+    },
+  ];
+  settings = {
+    provider: "META WHATSAPP CLOUD API",
+    providerMode: "meta-cloud-api",
+    connected: false,
+    lastWebhook: null as string | null,
+    lastQueueError: null as string | null,
+    deadLetters: [] as Array<{
+      jobId: string;
+      leadId: string;
+      campaignId?: string;
+      error?: string;
+      attempts: number;
+      failedAt: string;
+    }>,
+    queuePaused: false,
+    testMode: true,
+    maxConcurrentRequests: 2,
+    maxQueueSize: 1000,
+    maxRetries: 3,
+    retryBackoff: 1000,
+    pauseOnFailureRate: 0.25,
+  };
   createLead(input: Partial<Lead>) {
-    const normalizedPhone = normalizePhone(input.phone ?? input.normalizedPhone);
-    const duplicate = [...this.leads.values()].find((lead) => (normalizedPhone && lead.normalizedPhone === normalizedPhone) || (!!input.company && !!lead.company && lead.company.toLowerCase() === input.company.toLowerCase()) || (!!input.instagram && !!lead.instagram && lead.instagram.toLowerCase() === input.instagram.toLowerCase()));
+    const normalizedPhone = normalizePhone(
+      input.phone ?? input.normalizedPhone,
+    );
+    const duplicate = [...this.leads.values()].find(
+      (lead) =>
+        (normalizedPhone && lead.normalizedPhone === normalizedPhone) ||
+        (!!input.company &&
+          !!lead.company &&
+          lead.company.toLowerCase() === input.company.toLowerCase()) ||
+        (!!input.instagram &&
+          !!lead.instagram &&
+          lead.instagram.toLowerCase() === input.instagram.toLowerCase()),
+    );
     if (duplicate) return { duplicate };
-    const lead: Lead = { id: crypto.randomUUID(), name: input.name?.trim() || 'Sem nome', company: input.company?.trim(), phone: input.phone, normalizedPhone, email: input.email, instagram: input.instagram, googleMaps: input.googleMaps, site: input.site, city: input.city, state: input.state, niche: input.niche, source: input.source || 'MANUAL', observations: input.observations, nextFollowUpAt: input.nextFollowUpAt, lastContactAt: input.lastContactAt, siteModelSent: input.siteModelSent, proposedValue: input.proposedValue, proposalDate: input.proposalDate, status: (input.status as LeadStatus) || 'NOVO', assignedUserId: input.assignedUserId, consentStatus: input.consentStatus || 'UNKNOWN', consentSource: input.consentSource, consentDate: input.consentDate, createdAt: now(), updatedAt: now() };
-    this.leads.set(lead.id, lead); this.addHistory(lead.id, 'LEAD_CREATED'); void this.persistence?.saveLead(lead).catch(() => undefined); return { lead };
+    const lead: Lead = {
+      id: crypto.randomUUID(),
+      name: input.name?.trim() || "Sem nome",
+      company: input.company?.trim(),
+      phone: input.phone,
+      normalizedPhone,
+      email: input.email,
+      instagram: input.instagram,
+      googleMaps: input.googleMaps,
+      site: input.site,
+      city: input.city,
+      state: input.state,
+      niche: input.niche,
+      source: input.source || "MANUAL",
+      observations: input.observations,
+      nextFollowUpAt: input.nextFollowUpAt,
+      lastContactAt: input.lastContactAt,
+      siteModelSent: input.siteModelSent,
+      proposedValue: input.proposedValue,
+      proposalDate: input.proposalDate,
+      status: (input.status as LeadStatus) || "NOVO",
+      assignedUserId: input.assignedUserId,
+      consentStatus: input.consentStatus || "UNKNOWN",
+      consentSource: input.consentSource,
+      consentDate: input.consentDate,
+      createdAt: now(),
+      updatedAt: now(),
+    };
+    this.leads.set(lead.id, lead);
+    this.addHistory(lead.id, "LEAD_CREATED");
+    void this.persistence?.saveLead(lead).catch(() => undefined);
+    return { lead };
   }
-  updateLead(id: string, patch: Partial<Lead>, userId = 'demo-admin') {
-    const old = this.leads.get(id); if (!old) return;
-    const updated = { ...old, ...patch, normalizedPhone: patch.phone ? normalizePhone(patch.phone) : old.normalizedPhone, updatedAt: now() };
+  updateLead(id: string, patch: Partial<Lead>, userId = "demo-admin") {
+    const old = this.leads.get(id);
+    if (!old) return;
+    const updated = {
+      ...old,
+      ...patch,
+      normalizedPhone: patch.phone
+        ? normalizePhone(patch.phone)
+        : old.normalizedPhone,
+      updatedAt: now(),
+    };
     this.leads.set(id, updated);
-    this.addHistory(id, patch.status && patch.status !== old.status ? 'STATUS_CHANGED' : 'LEAD_EDITED', patch.status && patch.status !== old.status ? `${old.status} -> ${patch.status}` : undefined, userId); void this.persistence?.saveLead(updated).catch(() => undefined);
+    this.addHistory(
+      id,
+      patch.status && patch.status !== old.status
+        ? "STATUS_CHANGED"
+        : "LEAD_EDITED",
+      patch.status && patch.status !== old.status
+        ? `${old.status} -> ${patch.status}`
+        : undefined,
+      userId,
+    );
+    void this.persistence?.saveLead(updated).catch(() => undefined);
     return updated;
   }
-  deleteLead(id: string) { const deleted = this.leads.delete(id); if (deleted) { this.histories = this.histories.filter((item) => item.leadId !== id); this.messages = this.messages.filter((item) => item.conversationId !== id); void this.persistence?.deleteLead?.(id).catch(() => undefined); } return deleted; }
-  addHistory(leadId: string, type: string, details?: string, userId = 'demo-admin') { const item = { id: crypto.randomUUID(), leadId, type, details, userId, createdAt: now() }; this.histories.push(item); void this.persistence?.saveHistory(item).catch(() => undefined); }
-  addMessage(message: Omit<Message, 'id' | 'createdAt'>) { const existing = this.messages.find((item) => item.idempotencyKey === message.idempotencyKey); if (existing) return existing; const created = { ...message, id: crypto.randomUUID(), createdAt: now() }; this.messages.push(created); this.addHistory(message.conversationId, message.direction === 'INBOUND' ? 'MESSAGE_RECEIVED' : 'MESSAGE_SENT'); void this.persistence?.saveMessage(created).catch(() => undefined); return created; }
-  updateMessage(id: string, patch: Partial<Message>) { const index = this.messages.findIndex((item) => item.id === id); if (index < 0) return; const updated = { ...this.messages[index], ...patch }; this.messages[index] = updated; void this.persistence?.saveMessage(updated).catch(() => undefined); return updated; }
-  persistCampaign(campaign: StoredCampaign) { void this.persistence?.saveCampaign?.(campaign).catch(() => undefined); }
-  persistTask(task: StoredTask) { void this.persistence?.saveTask?.(task).catch(() => undefined); }
-  persistProspectSearch(search: ProspectSearch) { const index = this.prospectingSearches.findIndex((item) => item.id === search.id); if (index >= 0) this.prospectingSearches[index] = search; else this.prospectingSearches.push(search); void this.persistence?.saveProspectSearch?.(search).catch(() => undefined); }
-  persistProspectBusiness(business: ProspectBusiness) { const index = this.prospectBusinesses.findIndex((item) => item.id === business.id); if (index >= 0) this.prospectBusinesses[index] = business; else this.prospectBusinesses.push(business); void this.persistence?.saveProspectBusiness?.(business).catch(() => undefined); }
+  deleteLead(id: string) {
+    const deleted = this.leads.delete(id);
+    if (deleted) {
+      this.histories = this.histories.filter((item) => item.leadId !== id);
+      this.messages = this.messages.filter(
+        (item) => item.conversationId !== id,
+      );
+      void this.persistence?.deleteLead?.(id).catch(() => undefined);
+    }
+    return deleted;
+  }
+  addHistory(
+    leadId: string,
+    type: string,
+    details?: string,
+    userId = "demo-admin",
+  ) {
+    const item = {
+      id: crypto.randomUUID(),
+      leadId,
+      type,
+      details,
+      userId,
+      createdAt: now(),
+    };
+    this.histories.push(item);
+    void this.persistence?.saveHistory(item).catch(() => undefined);
+  }
+  addMessage(message: Omit<Message, "id" | "createdAt">) {
+    const existing = this.messages.find(
+      (item) => item.idempotencyKey === message.idempotencyKey,
+    );
+    if (existing) return existing;
+    const created = { ...message, id: crypto.randomUUID(), createdAt: now() };
+    this.messages.push(created);
+    this.addHistory(
+      message.conversationId,
+      message.direction === "INBOUND" ? "MESSAGE_RECEIVED" : "MESSAGE_SENT",
+    );
+    void this.persistence?.saveMessage(created).catch(() => undefined);
+    return created;
+  }
+  updateMessage(id: string, patch: Partial<Message>) {
+    const index = this.messages.findIndex((item) => item.id === id);
+    if (index < 0) return;
+    const updated = { ...this.messages[index], ...patch };
+    this.messages[index] = updated;
+    void this.persistence?.saveMessage(updated).catch(() => undefined);
+    return updated;
+  }
+  persistCampaign(campaign: StoredCampaign) {
+    void this.persistence?.saveCampaign?.(campaign).catch(() => undefined);
+  }
+  persistTask(task: StoredTask) {
+    void this.persistence?.saveTask?.(task).catch(() => undefined);
+  }
+  persistProspectSearch(search: ProspectSearch) {
+    const index = this.prospectingSearches.findIndex(
+      (item) => item.id === search.id,
+    );
+    if (index >= 0) this.prospectingSearches[index] = search;
+    else this.prospectingSearches.push(search);
+    void this.persistence?.saveProspectSearch?.(search).catch(() => undefined);
+  }
+  persistProspectBusiness(business: ProspectBusiness) {
+    const index = this.prospectBusinesses.findIndex(
+      (item) => item.id === business.id,
+    );
+    if (index >= 0) this.prospectBusinesses[index] = business;
+    else this.prospectBusinesses.push(business);
+    void this.persistence
+      ?.saveProspectBusiness?.(business)
+      .catch(() => undefined);
+  }
+  persistSavedLayout(layout: SavedLayout) {
+    const index = this.savedLayouts.findIndex((item) => item.id === layout.id);
+    if (index >= 0) this.savedLayouts[index] = layout;
+    else this.savedLayouts.push(layout);
+    void this.persistence?.saveSavedLayout?.(layout).catch(() => undefined);
+  }
+  deleteSavedLayout(id: string) {
+    const index = this.savedLayouts.findIndex((item) => item.id === id);
+    if (index < 0) return false;
+    this.savedLayouts.splice(index, 1);
+    void this.persistence?.deleteSavedLayout?.(id).catch(() => undefined);
+    return true;
+  }
   dashboard() {
-    const values = [...this.leads.values()]; const count = (status: LeadStatus) => values.filter((lead) => lead.status === status).length;
-    const byCity = groupBy(values, (lead) => lead.city || 'Sem cidade'); const byNiche = groupBy(values, (lead) => lead.niche || 'Sem nicho'); const today = new Date(); const startOfDay = new Date(today); startOfDay.setHours(0, 0, 0, 0); const endOfDay = new Date(today); endOfDay.setHours(23, 59, 59, 999); const followUps = { today: values.filter((lead) => lead.nextFollowUpAt && new Date(lead.nextFollowUpAt) >= startOfDay && new Date(lead.nextFollowUpAt) <= endOfDay), overdue: values.filter((lead) => lead.nextFollowUpAt && new Date(lead.nextFollowUpAt) < startOfDay), upcoming: values.filter((lead) => lead.nextFollowUpAt && new Date(lead.nextFollowUpAt) > endOfDay) };
-    return { total: values.length, new: count('NOVO'), contacted: count('CONTATADO'), responded: count('RESPONDEU'), interested: count('INTERESSADO'), meetings: count('REUNIAO'), proposals: count('PROPOSTA'), clients: count('CLIENTE'), pipeline: PIPELINE.map((status) => ({ status, count: count(status) })), byCity: Object.entries(byCity).map(([label, items]) => ({ label, count: items.length })), byNiche: Object.entries(byNiche).map(([label, items]) => ({ label, count: items.length })), recent: this.histories.slice(-8).reverse(), followUps, integration: { provider: this.settings.provider, queuePaused: this.settings.queuePaused, testMode: this.settings.testMode, lastWebhook: this.settings.lastWebhook } };
+    const values = [...this.leads.values()];
+    const count = (status: LeadStatus) =>
+      values.filter((lead) => lead.status === status).length;
+    const byCity = groupBy(values, (lead) => lead.city || "Sem cidade");
+    const byNiche = groupBy(values, (lead) => lead.niche || "Sem nicho");
+    const today = new Date();
+    const startOfDay = new Date(today);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(today);
+    endOfDay.setHours(23, 59, 59, 999);
+    const followUps = {
+      today: values.filter(
+        (lead) =>
+          lead.nextFollowUpAt &&
+          new Date(lead.nextFollowUpAt) >= startOfDay &&
+          new Date(lead.nextFollowUpAt) <= endOfDay,
+      ),
+      overdue: values.filter(
+        (lead) =>
+          lead.nextFollowUpAt && new Date(lead.nextFollowUpAt) < startOfDay,
+      ),
+      upcoming: values.filter(
+        (lead) =>
+          lead.nextFollowUpAt && new Date(lead.nextFollowUpAt) > endOfDay,
+      ),
+    };
+    return {
+      total: values.length,
+      new: count("NOVO"),
+      contacted: count("CONTATADO"),
+      responded: count("RESPONDEU"),
+      interested: count("INTERESSADO"),
+      meetings: count("REUNIAO"),
+      proposals: count("PROPOSTA"),
+      clients: count("CLIENTE"),
+      pipeline: PIPELINE.map((status) => ({ status, count: count(status) })),
+      byCity: Object.entries(byCity).map(([label, items]) => ({
+        label,
+        count: items.length,
+      })),
+      byNiche: Object.entries(byNiche).map(([label, items]) => ({
+        label,
+        count: items.length,
+      })),
+      recent: this.histories.slice(-8).reverse(),
+      followUps,
+      integration: {
+        provider: this.settings.provider,
+        queuePaused: this.settings.queuePaused,
+        testMode: this.settings.testMode,
+        lastWebhook: this.settings.lastWebhook,
+      },
+    };
   }
 }

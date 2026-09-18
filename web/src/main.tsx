@@ -1046,6 +1046,12 @@ function ProspectingOverview() {
           ["Só rede social", data?.socialOnly],
           ["Com site", data?.website],
           ["Score médio", data?.averageScore],
+          ["Sem ação", data?.commercial?.NOVO],
+          ["Para abordar", data?.commercial?.PARA_ABORDAR],
+          ["Abordados", data?.commercial?.ABORDADO],
+          ["Interessados", data?.commercial?.INTERESSADO],
+          ["Propostas", data?.commercial?.PROPOSTA],
+          ["Fechados", data?.commercial?.FECHADO],
         ].map((item) => (
           <div className="metric" key={item[0]}>
             <span>{item[0]}</span>
@@ -1192,6 +1198,7 @@ function SearchHistory() {
               <th>QUANTIDADE</th>
               <th>RESULTADOS</th>
               <th>STATUS</th>
+              <th>AÇÕES</th>
             </tr>
           </thead>
           <tbody>
@@ -1206,6 +1213,35 @@ function SearchHistory() {
                 <td>{item.quantity}</td>
                 <td>{item.resultsCount}</td>
                 <td>{searchStatusLabel(item.status)}</td>
+                <td>
+                  <button
+                    className="table-action"
+                    onClick={() => {
+                      sessionStorage.setItem("impulse.reopenSearchId", item.id);
+                      location.hash = "prospecting";
+                    }}
+                  >
+                    Ver resultados
+                  </button>
+                  {["FAILED", "INTERRUPTED"].includes(item.status) && (
+                    <button
+                      className="table-action"
+                      onClick={() =>
+                        void post<any>(
+                          `/api/prospecting/searches/${item.id}/retry`,
+                        ).then((result) => {
+                          sessionStorage.setItem(
+                            "impulse.reopenSearchId",
+                            result.data.id,
+                          );
+                          location.hash = "prospecting";
+                        })
+                      }
+                    >
+                      Tentar novamente
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -1220,6 +1256,38 @@ function SearchHistory() {
   );
 }
 function Integrations() {
+  const integrations = [
+    [
+      "Google Places",
+      "Não configurado",
+      "Dados oficiais de negócio, telefone, avaliação e coordenadas.",
+      "Requer GOOGLE_PLACES_API_KEY.",
+    ],
+    [
+      "OpenStreetMap",
+      "Disponível",
+      "Geocodificação e cobertura pública de mapas.",
+      "Nominatim/tiles públicos com limites de uso.",
+    ],
+    [
+      "Busca Web",
+      "Não configurado",
+      "Descoberta complementar de presença digital pública.",
+      "Requer SEARCH_PROVIDER_API_KEY.",
+    ],
+    [
+      "Social Discovery",
+      "Somente público",
+      "Links públicos de redes sociais.",
+      "Não acessa sessões privadas.",
+    ],
+    [
+      "Map Tiles",
+      "Disponível",
+      "Ruas, marcadores, clusters e enquadramento.",
+      "OpenStreetMap raster tiles.",
+    ],
+  ];
   return (
     <>
       <section className="hero-row">
@@ -1228,23 +1296,23 @@ function Integrations() {
         </p>
       </section>
       <section className="metrics">
-        {[
-          ["Google Places", "Não configurado"],
-          ["OpenStreetMap", "Disponível"],
-          ["Busca Web", "Não configurado"],
-          ["Social Discovery", "Somente público"],
-        ].map((item) => (
+        {integrations.map((item) => (
           <div className="metric" key={item[0]}>
             <span>{item[0]}</span>
             <strong className="integration-status">{item[1]}</strong>
-            <small>credenciais permanecem no backend</small>
+            <small>{item[2]}</small>
           </div>
         ))}
       </section>
       <section className="panel">
-        <h2>Política de integração</h2>
+        <h2>Capacidade e configuração</h2>
+        {integrations.map((item) => (
+          <p className="muted" key={item[0]}>
+            <b>{item[0]}:</b> {item[3]}
+          </p>
+        ))}
         <p className="muted">
-          O sistema usa apenas APIs oficiais e dados públicos. Não automatiza
+          O sistema usa apenas APIs oficiais e dados públicos; não automatiza
           login, scraping de sessões privadas, CAPTCHA ou evasão de limites.
         </p>
       </section>
@@ -1252,15 +1320,110 @@ function Integrations() {
   );
 }
 function Account() {
+  const defaults = {
+    agencyName: "Impulse Radar",
+    portfolioUrl: "",
+    defaultQuantity: "20",
+    defaultScore: "0",
+    defaultLevel: "ALTO",
+    defaultCoverage: "INTELLIGENT",
+    proposalValue: "",
+    proposalDeadline: "15",
+  };
+  const [values, setValues] = useState(() => ({
+    ...defaults,
+    ...JSON.parse(localStorage.getItem("impulse.account") || "{}"),
+  }));
+  const save = (key: string, value: string) =>
+    setValues((current) => {
+      const next = { ...current, [key]: value };
+      localStorage.setItem("impulse.account", JSON.stringify(next));
+      return next;
+    });
   return (
     <>
       <section className="hero-row">
         <p className="muted">Preferências e segurança da sua conta.</p>
       </section>
-      <section className="panel">
+      <section className="panel form-grid">
         <span className="eyebrow">CONTA ATUAL</span>
         <h2>Minha conta</h2>
-        <p className="muted">
+        <label>
+          Nome da agência
+          <input
+            value={values.agencyName}
+            onChange={(e) => save("agencyName", e.target.value)}
+          />
+        </label>
+        <label>
+          URL do portfólio
+          <input
+            type="url"
+            value={values.portfolioUrl}
+            onChange={(e) => save("portfolioUrl", e.target.value)}
+          />
+        </label>
+        <label>
+          Quantidade padrão
+          <input
+            type="number"
+            min="5"
+            max="500"
+            value={values.defaultQuantity}
+            onChange={(e) => save("defaultQuantity", e.target.value)}
+          />
+        </label>
+        <label>
+          Score mínimo padrão
+          <select
+            value={values.defaultScore}
+            onChange={(e) => save("defaultScore", e.target.value)}
+          >
+            {[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((value) => (
+              <option key={value}>{value}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Nível padrão
+          <select
+            value={values.defaultLevel}
+            onChange={(e) => save("defaultLevel", e.target.value)}
+          >
+            <option value="FRACO">Fraco</option>
+            <option value="MEDIO">Médio</option>
+            <option value="ALTO">Alto</option>
+            <option value="ULTRA">Ultra</option>
+          </select>
+        </label>
+        <label>
+          Cobertura padrão
+          <select
+            value={values.defaultCoverage}
+            onChange={(e) => save("defaultCoverage", e.target.value)}
+          >
+            <option value="STRICT">Estrita</option>
+            <option value="INTELLIGENT">Inteligente</option>
+            <option value="BROAD">Ampla</option>
+          </select>
+        </label>
+        <label>
+          Valor padrão da proposta
+          <input
+            value={values.proposalValue}
+            onChange={(e) => save("proposalValue", e.target.value)}
+            placeholder="R$"
+          />
+        </label>
+        <label>
+          Prazo padrão (dias)
+          <input
+            type="number"
+            value={values.proposalDeadline}
+            onChange={(e) => save("proposalDeadline", e.target.value)}
+          />
+        </label>
+        <p className="muted wide">
           A autenticação e o controle de acesso continuam protegidos pelo
           backend.
         </p>
