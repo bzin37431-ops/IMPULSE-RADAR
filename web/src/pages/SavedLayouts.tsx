@@ -23,6 +23,9 @@ type Business = {
   reviewsCount?: number;
   digitalStatus: string;
   digitalStatusConfidence: string;
+  websiteConfidence: string;
+  socialConfidence: string;
+  phoneConfidence: string;
   opportunityScore: number;
   scoreBreakdown?: Record<string, number>;
   sourceProviders?: string[];
@@ -352,6 +355,7 @@ export function SavedLayouts() {
               <div className="drawer-section">
                 <label>CONTATO</label>
               <b>{selected.business.phone || "Não localizado"}</b>
+              <small>Telefone: {selected.business.phoneConfidence}</small>
               <b>
                 {selected.business.address ||
                   `${selected.business.city}, ${selected.business.state}`}
@@ -373,6 +377,9 @@ export function SavedLayouts() {
               </b>
               <small>
                 Confiança: {selected.business.digitalStatusConfidence}
+              </small>
+              <small>
+                Site: {selected.business.websiteConfidence} · Redes: {selected.business.socialConfidence}
               </small>
             </div>
             <div className="drawer-section">

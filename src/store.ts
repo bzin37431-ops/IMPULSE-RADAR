@@ -97,6 +97,9 @@ export type ProspectBusiness = {
   reviewsCount?: number;
   digitalStatus: string;
   digitalStatusConfidence: string;
+  websiteConfidence: string;
+  socialConfidence: string;
+  phoneConfidence: string;
   opportunityScore: number;
   scoreBreakdown?: Record<string, number>;
   sourceProviders?: string[];

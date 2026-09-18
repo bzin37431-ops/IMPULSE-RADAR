@@ -377,6 +377,9 @@ model ProspectBusiness {
   reviewsCount            Int?
   digitalStatus           ProspectDigitalStatus @default(UNKNOWN)
   digitalStatusConfidence String                @default("LOW")
+  websiteConfidence       String                @default("UNKNOWN")
+  socialConfidence        String                @default("UNKNOWN")
+  phoneConfidence         String                @default("UNKNOWN")
   opportunityScore        Int                   @default(0)
   scoreBreakdown          Json?
   sourceProviders         Json?

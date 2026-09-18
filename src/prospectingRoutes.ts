@@ -74,6 +74,12 @@ function toBusiness(
     reviewsCount: item.reviewsCount,
     digitalStatus: item.digitalStatus,
     digitalStatusConfidence: item.confidence,
+    websiteConfidence: item.website ? "CONFIRMED" : "UNKNOWN",
+    socialConfidence:
+      item.instagram || item.facebook || item.tiktok || item.linkedin
+        ? "FOUND"
+        : "UNKNOWN",
+    phoneConfidence: item.normalizedPhone ? "NORMALIZED" : "UNKNOWN",
     opportunityScore: item.score,
     scoreBreakdown: item.breakdown,
     sourceProviders: item.externalIds ? Object.keys(item.externalIds) : [],
