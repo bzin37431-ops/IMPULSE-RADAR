@@ -1,11 +1,12 @@
 import { PrismaClient } from "@prisma/client";
+import { databaseUrl } from "./config.js";
 import crypto from "node:crypto";
 import { MemoryStore } from "./store.js";
 import { Lead, History, Message } from "./domain.js";
 import { ProspectBusiness, ProspectSearch, SavedLayout } from "./store.js";
 
 export class PrismaPersistence {
-  readonly prisma = new PrismaClient();
+  readonly prisma = new PrismaClient(databaseUrl ? { datasources: { db: { url: databaseUrl } } } : undefined);
   async load(store: MemoryStore) {
     const leads = await this.prisma.lead.findMany({
       include: { consent: true, optOut: true },

@@ -4,5 +4,11 @@
     "api/[...path].ts": {
       "maxDuration": 300
     }
+  },
+  "env": {
+    "TEST_MODE": "false",
+    "DISCOVERY_MODE": "real",
+    "DISCOVERY_TEST_MODE": "false",
+    "PROVIDER_MODE": "meta-cloud-api"
   }
 }

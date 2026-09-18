@@ -1,12 +1,12 @@
 {
-  "name": "impulse-whatsapp-crm",
+  "name": "impulse-radar",
   "version": "1.0.0",
   "private": true,
-  "description": "Impulse WhatsApp CRM using only the official Meta WhatsApp Cloud API.",
+  "description": "Impulse Radar business discovery and prospecting platform.",
   "type": "module",
   "scripts": {
     "dev": "concurrently -k \"tsx watch src/server.ts\" \"vite --host 0.0.0.0\"",
-    "build": "prisma generate && tsc -p tsconfig.json && vite build",
+    "build": "node scripts/vercel-migrate.mjs && prisma generate && tsc -p tsconfig.json && vite build",
     "start": "node dist/src/server.js",
     "typecheck": "prisma generate && tsc -p tsconfig.json --noEmit",
     "test": "tsx --test tests/**/*.test.ts",
