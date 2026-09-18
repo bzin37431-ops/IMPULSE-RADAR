@@ -191,6 +191,7 @@ export function Prospecting({
     [results, setResults] = useState<Business[]>([]),
     [selectedId, setSelectedId] = useState<string>(),
     [selectedIds, setSelectedIds] = useState<string[]>([]),
+    [resultPage, setResultPage] = useState(0),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   useEffect(() => {
@@ -230,6 +231,7 @@ export function Prospecting({
       .then((data) => {
         setSearch(data.search);
         setResults(data.data);
+        setResultPage(0);
       })
       .catch((e) => setError(e.message));
   }, []);
@@ -291,6 +293,7 @@ export function Prospecting({
       });
       setSearch(data.data);
       setResults([]);
+      setResultPage(0);
       notify({
         kind: "success",
         title: "Busca iniciada",
@@ -332,6 +335,25 @@ export function Prospecting({
       notify({ kind: "error", title: "Ação em massa indisponível", description: e.message });
     }
   };
+  const exportSelected = () => {
+    const rows = results.filter((item) => selectedIds.includes(item.id));
+    const csv = [
+      "Empresa,Telefone,Cidade,Estado,Nicho,Score,Status digital",
+      ...rows.map((item) =>
+        [item.name, item.phone, item.city, item.state, item.category, item.opportunityScore, digitalLabels[item.digitalStatus] || item.digitalStatus]
+          .map((value) => `"${String(value || "").replaceAll('"', '""')}"`)
+          .join(","),
+      ),
+    ].join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "impulse-layouts-selecionados.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+  const visibleResults = results.slice(resultPage * 50, resultPage * 50 + 50);
+  const pageCount = Math.max(1, Math.ceil(results.length / 50));
   const save = async (item: Business) => {
     try {
       const response: any = await post(
@@ -557,6 +579,9 @@ export function Prospecting({
               <button className="ghost" disabled={!selectedIds.length} onClick={() => void bulk("SAVE")}>
                 Salvar selecionadas
               </button>
+              <button className="ghost" disabled={!selectedIds.length} onClick={exportSelected}>
+                Exportar selecionadas
+              </button>
               <button className="danger" disabled={!selectedIds.length} onClick={() => void bulk("DISCARD")}>
                 Descartar selecionadas
               </button>
@@ -569,7 +594,7 @@ export function Prospecting({
           ) : (
             <div className="prospect-split">
               <div className="prospect-list">
-                {results.map((item) => (
+                {visibleResults.map((item) => (
                   <article
                     className={`prospect-card ${selectedId === item.id ? "selected" : ""}`}
                     id={`prospect-${item.id}`}
@@ -656,6 +681,17 @@ export function Prospecting({
                     </div>
                   </article>
                 ))}
+                {results.length > 50 && (
+                  <div className="prospect-pagination">
+                    <button className="ghost" disabled={resultPage === 0} onClick={() => setResultPage((page) => page - 1)}>
+                      Anterior
+                    </button>
+                    <span>Página {resultPage + 1} de {pageCount}</span>
+                    <button className="ghost" disabled={resultPage >= pageCount - 1} onClick={() => setResultPage((page) => page + 1)}>
+                      Próxima
+                    </button>
+                  </div>
+                )}
               </div>
               <div className="prospect-map">
                 <div className="map-header">

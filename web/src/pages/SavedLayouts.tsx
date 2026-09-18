@@ -106,6 +106,12 @@ function ProposalForm({ item }: { item: Business }) {
 export function SavedLayouts() {
   const [items, setItems] = useState<Layout[]>([]),
     [status, setStatus] = useState<Status | "">(""),
+    [stateFilter, setStateFilter] = useState(""),
+    [cityFilter, setCityFilter] = useState(""),
+    [districtFilter, setDistrictFilter] = useState(""),
+    [nicheFilter, setNicheFilter] = useState(""),
+    [digitalFilter, setDigitalFilter] = useState(""),
+    [scoreFilter, setScoreFilter] = useState(""),
     [selected, setSelected] = useState<Layout>(),
     [tool, setTool] = useState<"approach" | "proposal" | undefined>(),
     [error, setError] = useState("");
@@ -115,9 +121,24 @@ export function SavedLayouts() {
       .catch((e) => setError(e.message));
   useEffect(() => { void load(); }, []);
   const filtered = useMemo(
-    () => items.filter((x) => !status || x.commercialStatus === status),
-    [items, status],
+    () => items.filter((x) => {
+      const business = x.business;
+      return (!status || x.commercialStatus === status) &&
+        (!stateFilter || business.state === stateFilter) &&
+        (!cityFilter || business.city === cityFilter) &&
+        (!districtFilter || (business.district || "") === districtFilter) &&
+        (!nicheFilter || (business.category || "") === nicheFilter) &&
+        (!digitalFilter || business.digitalStatus === digitalFilter) &&
+        (!scoreFilter || business.opportunityScore >= Number(scoreFilter));
+    }),
+    [items, status, stateFilter, cityFilter, districtFilter, nicheFilter, digitalFilter, scoreFilter],
   );
+  const filterOptions = useMemo(() => ({
+    states: [...new Set(items.map((item) => item.business.state))].sort((a, b) => a.localeCompare(b, "pt-BR")),
+    cities: [...new Set(items.map((item) => item.business.city))].sort((a, b) => a.localeCompare(b, "pt-BR")),
+    districts: [...new Set(items.map((item) => item.business.district).filter(Boolean) as string[])].sort((a, b) => a.localeCompare(b, "pt-BR")),
+    niches: [...new Set(items.map((item) => item.business.category).filter(Boolean) as string[])].sort((a, b) => a.localeCompare(b, "pt-BR")),
+  }), [items]);
   const update = async (id: string, body: Partial<Layout>) => {
     const x = await patch<{ data: Layout }>(
       `/api/prospecting/saved-layouts/${id}`,
@@ -160,6 +181,33 @@ export function SavedLayouts() {
               {v}
             </option>
           ))}
+        </select>
+      </div>
+      <div className="panel saved-layout-filters">
+        <span className="eyebrow">FILTRAR LAYOUTS</span>
+        <select value={stateFilter} onChange={(e) => setStateFilter(e.target.value)}>
+          <option value="">Todos os estados</option>
+          {filterOptions.states.map((value) => <option key={value}>{value}</option>)}
+        </select>
+        <select value={cityFilter} onChange={(e) => setCityFilter(e.target.value)}>
+          <option value="">Todas as cidades</option>
+          {filterOptions.cities.map((value) => <option key={value}>{value}</option>)}
+        </select>
+        <select value={districtFilter} onChange={(e) => setDistrictFilter(e.target.value)}>
+          <option value="">Todos os bairros</option>
+          {filterOptions.districts.map((value) => <option key={value}>{value}</option>)}
+        </select>
+        <select value={nicheFilter} onChange={(e) => setNicheFilter(e.target.value)}>
+          <option value="">Todos os nichos</option>
+          {filterOptions.niches.map((value) => <option key={value}>{value}</option>)}
+        </select>
+        <select value={digitalFilter} onChange={(e) => setDigitalFilter(e.target.value)}>
+          <option value="">Todos os status digitais</option>
+          {Object.entries(digitalLabels).filter(([key]) => key !== "UNKNOWN").map(([key, value]) => <option value={key} key={key}>{value}</option>)}
+        </select>
+        <select value={scoreFilter} onChange={(e) => setScoreFilter(e.target.value)}>
+          <option value="">Qualquer score</option>
+          {[20, 40, 60, 70, 80, 90].map((value) => <option value={value} key={value}>{value}+</option>)}
         </select>
       </div>
       {error && <div className="panel error-state">{error}</div>}
