@@ -3,6 +3,10 @@ export type DiscoveryBusiness = {
   name: string;
   category?: string;
   phone?: string;
+  phoneSource?: string;
+  phoneSourceUrl?: string;
+  phoneConfidence?: string;
+  phoneVerifiedAt?: string;
   whatsapp?: string;
   email?: string;
   instagram?: string;
@@ -20,6 +24,8 @@ export type DiscoveryBusiness = {
   longitude?: number;
   rating?: number;
   reviewsCount?: number;
+  enrichmentAttempted?: boolean;
+  enrichmentSource?: string;
 };
 export type DiscoveryQuery = { state: string; city: string; district?: string; niche: string; quantity: number; digitalStatus?: string; coverageMode?: string; searchId?: string };
 export type ProviderRateLimit = { requestsPerMinute?: number; configured: boolean };

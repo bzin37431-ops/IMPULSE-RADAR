@@ -356,6 +356,9 @@ model ProspectBusiness {
   normalizedName          String
   category                String?
   phone                   String?
+  phoneSource             String?
+  phoneSourceUrl          String?
+  phoneVerifiedAt         DateTime?
   normalizedPhone         String?
   whatsapp                String?
   email                   String?

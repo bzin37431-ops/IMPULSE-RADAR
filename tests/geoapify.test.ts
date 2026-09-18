@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { GeoapifyProvider, normalizeGeoapifyFeature } from "../src/providers/discovery/GeoapifyProvider.js";
 import { geoapifyCategories } from "../src/nicheRelevance.js";
+import { assessNicheRelevance } from "../src/nicheRelevance.js";
+import { ProspectEnrichmentService } from "../src/prospectEnrichmentService.js";
 
 const query = { state: "São Paulo", city: "Jacareí", niche: "Restaurante japonês", quantity: 20, coverageMode: "STRICT" } as const;
 
@@ -38,6 +40,25 @@ test("não inventa telefone quando a feature não traz contato", () => {
 
 test("mapeia restaurante japonês somente para categorias Geoapify relevantes", () => {
   assert.deepEqual(geoapifyCategories("Restaurante japonês"), ["catering.restaurant.japanese", "catering.restaurant.sushi", "catering.restaurant.ramen"]);
+});
+
+test("categoria oficial de restaurante tem prioridade sem exigir a palavra no nome", () => {
+  assert.equal(assessNicheRelevance("Sushi Yama", "catering.restaurant, catering.restaurant.sushi", "Restaurante").relevant, true);
+  assert.equal(assessNicheRelevance("Mercado Jacareí", "shop.supermarket", "Restaurante").relevant, false);
+  assert.equal(assessNicheRelevance("Restaurante comum", "catering.restaurant", "Restaurante japonês").relevant, false);
+});
+
+test("enrichment exige identidade compatível e guarda evidência do telefone", async () => {
+  const service = new ProspectEnrichmentService({
+    getProviderName: () => "TEST_SEARCH",
+    isConfigured: () => true,
+    search: async () => [{ name: "Sushi Yama", city: "Jacareí", state: "São Paulo", address: "Rua A, 10", phone: "+55 12 99999-0000", phoneSourceUrl: "https://example.test/sushi", confidence: "HIGH" }],
+  });
+  const result = await service.enrich({ name: "Sushi Yama", city: "Jacareí", state: "São Paulo", address: "Rua A, 10", category: "catering.restaurant.sushi" }, query);
+  assert.equal(result.attempted, true);
+  assert.equal(result.foundPhone, true);
+  assert.equal(result.business.phoneSource, "TEST_SEARCH");
+  assert.equal(result.business.phoneSourceUrl, "https://example.test/sushi");
 });
 
 test("provider real usa geocoding e Places sem depender de MockDiscoveryProvider", async () => {
