@@ -6,8 +6,33 @@ import { assessNicheRelevance } from "../src/nicheRelevance.js";
 import { ProspectEnrichmentService } from "../src/prospectEnrichmentService.js";
 import { TavilyWebSearchProvider } from "../src/providers/discovery/TavilyWebSearchProvider.js";
 import { evaluateReceitaMatch } from "../src/providers/enrichment/ReceitaCnpjEnrichmentProvider.js";
+import { normalizeCnpj } from "../src/receitaCnpjIndex.js";
+import { normalizeReceiptPhone, parseOfficialEstablishment } from "../src/receitaCnpjImporter.js";
 
 const query = { state: "São Paulo", city: "Jacareí", niche: "Restaurante japonês", quantity: 20, coverageMode: "STRICT" } as const;
+
+test("normaliza CNPJ antigo, alfanumérico e zeros sem coerção numérica", () => {
+  assert.equal(normalizeCnpj("00.000.000/0001-91"), "00000000000191");
+  assert.equal(normalizeCnpj("AB.001/0001-9Z"), "AB00100019Z");
+  assert.equal(normalizeCnpj("00012345678900"), "00012345678900");
+});
+
+test("interpreta layout oficial de estabelecimento, município, UF, situação e telefones", () => {
+  const row = Array.from({ length: 30 }, () => "");
+  row[0] = "00000001"; row[1] = "0001"; row[2] = "91"; row[3] = "1"; row[4] = "SUSHI JACAREI"; row[5] = "02";
+  row[11] = "5611201"; row[12] = "5611203"; row[13] = "Rua"; row[14] = "das Flores"; row[15] = "10"; row[16] = "Sala 2"; row[17] = "Centro"; row[18] = "12300-000"; row[19] = "SP"; row[20] = "6451"; row[21] = "12"; row[22] = "39551234"; row[23] = "12"; row[24] = "99999999"; row[27] = "contato@sushi.example";
+  const parsed = parseOfficialEstablishment(row, "Jacareí", "SUSHI JACAREI LTDA");
+  assert.equal(parsed?.cnpj, "00000001000191");
+  assert.equal(parsed?.city, "Jacareí"); assert.equal(parsed?.state, "SP"); assert.equal(parsed?.status, "ATIVA");
+  assert.equal(parsed?.phone1, "1239551234"); assert.equal(parsed?.phone2, null); assert.equal(parsed?.cnaeSecondary, "5611203");
+  assert.equal(parsed?.complement, "Sala 2");
+});
+
+test("descarta telefone vazio, placeholder ou obviamente inválido", () => {
+  assert.equal(normalizeReceiptPhone("", ""), null);
+  assert.equal(normalizeReceiptPhone("11", "00000000"), null);
+  assert.equal(normalizeReceiptPhone("11", "12345678"), "1112345678");
+});
 
 test("normaliza feature Geoapify com endereço, telefone, categoria e coordenadas reais", () => {
   const business = normalizeGeoapifyFeature({

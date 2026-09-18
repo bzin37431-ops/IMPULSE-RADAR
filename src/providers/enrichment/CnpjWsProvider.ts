@@ -2,6 +2,7 @@ import { env } from '../../config.js';
 import { normalizePhone } from '../../domain.js';
 import { DiscoveryBusiness, DiscoveryQuery } from '../discovery/DiscoveryProvider.js';
 import { WebSearchEvidence } from '../discovery/WebSearchDiscoveryProvider.js';
+import { normalizeCnpj } from '../../receitaCnpjIndex.js';
 
 type CnpjWsPayload = { cnpj?: string; estabelecimento?: { cnpj?: string; nome_fantasia?: string; telefone1?: string; telefone2?: string; email?: string; cidade?: { nome?: string }; estado?: { sigla?: string }; bairro?: string; logradouro?: string; numero?: string } };
 const cache = new Map<string, { expiresAt: number; evidence: WebSearchEvidence[] }>();
@@ -16,7 +17,7 @@ export class CnpjWsProvider {
   getRequestCount() { return this.requestCount; }
   async enrich(business: DiscoveryBusiness, _query: DiscoveryQuery): Promise<WebSearchEvidence[]> {
     if (!this.isConfigured()) return [];
-    const cnpj = business.externalIds?.cnpj?.replace(/\D/g, '');
+    const cnpj = normalizeCnpj(business.externalIds?.cnpj);
     if (!cnpj) return [];
     const cached = cache.get(cnpj);
     if (cached && cached.expiresAt > Date.now()) return cached.evidence;

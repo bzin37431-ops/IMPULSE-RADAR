@@ -432,14 +432,20 @@ model ProviderResult {
 
 model CnpjEstablishmentIndex {
   cnpj                   String   @id
+  cnpjBasic              String?
+  cnpjOrder              String?
+  cnpjDv                 String?
+  branchType             String?
   businessName           String
   normalizedBusinessName String
   tradeName              String?
   normalizedTradeName    String?
   status                 String
   cnae                   String?
+  cnaeSecondary          String?
   street                 String?
   number                 String?
+  complement             String?
   district               String?
   city                   String
   state                  String
@@ -454,4 +460,26 @@ model CnpjEstablishmentIndex {
   @@index([city, state])
   @@index([postalCode])
   @@index([cnae])
+}
+
+model CnpjCompanyIndex {
+  cnpjBasic  String   @id
+  businessName String
+  updatedAt  DateTime @updatedAt
+}
+
+model CnpjCnaeIndex {
+  code       String   @id
+  description String
+  updatedAt  DateTime @updatedAt
+}
+
+model CnpjImportMetadata {
+  id                 String   @id
+  datasetVersion     String
+  datasetImportedAt  DateTime
+  source             String
+  establishmentCount  Int      @default(0)
+  ufs                Json?
+  updatedAt           DateTime @updatedAt
 }

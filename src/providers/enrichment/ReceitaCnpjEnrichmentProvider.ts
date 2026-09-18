@@ -33,6 +33,7 @@ export class ReceitaCnpjEnrichmentProvider {
   async count() { return prisma.cnpjEstablishmentIndex.count(); }
   async getIntegrationStatus() { try { return (await this.count()) > 0 ? 'Ativo' : 'Base não importada'; } catch { return 'Erro'; } }
   async getLastUpdatedAt() { const latest = await prisma.cnpjEstablishmentIndex.findFirst({ orderBy: { updatedAt: 'desc' }, select: { updatedAt: true } }); return latest?.updatedAt.toISOString(); }
+  async getMetadata() { return prisma.cnpjImportMetadata.findUnique({ where: { id: 'CNPJ_RFB' }, select: { datasetVersion: true, datasetImportedAt: true, source: true, establishmentCount: true, ufs: true } }); }
 
   async enrich(business: DiscoveryBusiness, _query: DiscoveryQuery): Promise<WebSearchEvidence[]> {
     if (!this.isConfigured()) return [];
