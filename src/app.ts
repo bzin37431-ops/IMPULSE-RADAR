@@ -19,6 +19,7 @@ import { PrismaPersistence } from './persistence.js';
 import { registerProspectingRoutes } from './prospectingRoutes.js';
 import { ProspectingQueue } from './prospectingQueue.js';
 import { GeoapifyProvider } from './providers/discovery/GeoapifyProvider.js';
+import { TavilyWebSearchProvider } from './providers/discovery/TavilyWebSearchProvider.js';
 
 const leadSchema = z.object({
   name: z.string().min(1), company: z.string().optional(), phone: z.string().optional(), email: z.string().email().optional().or(z.literal('')),
@@ -59,10 +60,11 @@ export function buildApp(opts: { store?: MemoryStore; provider?: WhatsAppProvide
   app.addHook('preValidation', (request, reply, done) => { if (request.method === 'POST' && request.url === '/webhooks/whatsapp') { const parsed = webhookSchema.safeParse(request.body); if (!parsed.success) return done(Object.assign(new Error('Payload de webhook inválido.'), { statusCode: 400 })); request.body = parsed.data; } done(); });
   app.setErrorHandler((error, request, reply) => { request.log.error({ err: error, message: errorMessage(error) }, 'request failed'); reply.status((error as { statusCode?: number }).statusCode || 400).send({ error: 'REQUEST_ERROR', message: errorMessage(error) }); });
   app.get('/health', async () => ({ api: 'ok', database: env.DATABASE_URL ? 'configured' : 'not_configured', redis: env.REDIS_URL ? 'configured' : 'not_configured', worker: 'ok', metaApi: env.TEST_MODE ? 'mock-test-mode' : 'configured' }));
-  app.get('/api/integrations', async () => { const geoapifyStatus = !env.GEOAPIFY_API_KEY ? 'Não configurado' : await new GeoapifyProvider().checkConnection() ? 'Ativo' : 'Erro'; return { data: [
+  app.get('/api/integrations', async () => { const geoapifyStatus = !env.GEOAPIFY_API_KEY ? 'Não configurado' : await new GeoapifyProvider().checkConnection() ? 'Ativo' : 'Erro'; const tavilyProvider = new TavilyWebSearchProvider(); const tavilyProviderStatus = tavilyProvider.getStatus(); const tavilyStatus = tavilyProviderStatus === 'NOT_CONFIGURED' ? 'Não configurado' : tavilyProviderStatus === 'RATE_LIMITED' || tavilyProviderStatus === 'QUOTA_EXHAUSTED' ? 'Limite atingido' : tavilyProviderStatus === 'ERROR' ? 'Erro' : 'Ativo'; return { data: [
     { name: 'Geoapify', status: geoapifyStatus, detail: 'Places API e Geocoding API no backend.', requirement: 'Requer GEOAPIFY_API_KEY no servidor.' },
     { name: 'OpenStreetMap', status: 'Disponível', detail: 'Dados públicos auxiliares e tiles.', requirement: 'Limites de uso públicos.' },
     { name: 'Busca Web', status: env.SEARCH_PROVIDER_API_KEY ? 'Ativo' : 'Não configurado', detail: 'Descoberta complementar de presença digital.', requirement: 'Requer SEARCH_PROVIDER_API_KEY.' },
+    { name: 'Tavily Web Search', status: tavilyStatus, detail: 'Enriquecimento de candidatos Geoapify sem telefone.', requirement: 'Requer TAVILY_API_KEY no servidor.' },
     { name: 'Social Discovery', status: 'Somente público', detail: 'Links públicos de redes sociais.', requirement: 'Não acessa sessões privadas.' },
     { name: 'Map Tiles', status: 'Disponível', detail: 'Mapa MapLibre com coordenadas reais dos resultados.', requirement: 'OpenStreetMap raster tiles.' },
   ], discoveryMode: env.DISCOVERY_MODE, discoveryTestMode: env.DISCOVERY_TEST_MODE }; });

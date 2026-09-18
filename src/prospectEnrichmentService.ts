@@ -27,7 +27,10 @@ export class ProspectEnrichmentService {
     const cached = cache.get(key);
     if (cached && cached.expiresAt > Date.now()) return cached.result;
     const evidence: WebSearchEvidence[] = [];
-    for (const searchQuery of this.queries(business)) evidence.push(...await this.provider.search(searchQuery));
+    for (const searchQuery of this.queries(business)) {
+      evidence.push(...await this.provider.search(searchQuery, { name: business.name, city: business.city, state: business.state, district: business.district, address: business.address }));
+      if (evidence.some((item) => this.matches(business, item) && item.phone && normalizePhone(item.phone))) break;
+    }
     const match = evidence.find((item) => this.matches(business, item) && item.phone && normalizePhone(item.phone));
     const result: EnrichmentResult = { business: { ...business, ...(match ? this.applyEvidence(business, match) : {}), enrichmentAttempted: true, enrichmentSource: this.provider.getProviderName() }, attempted: true, foundPhone: Boolean(match?.phone), source: match ? this.provider.getProviderName() : undefined };
     cache.set(key, { expiresAt: Date.now() + TTL, result });
@@ -35,6 +38,6 @@ export class ProspectEnrichmentService {
     return result;
   }
   private applyEvidence(business: DiscoveryBusiness, evidence: WebSearchEvidence): Partial<DiscoveryBusiness> {
-    return { phone: evidence.phone, phoneSource: this.provider?.getProviderName(), phoneSourceUrl: evidence.phoneSourceUrl, phoneConfidence: evidence.confidence || 'CONFIRMED', phoneVerifiedAt: new Date().toISOString(), website: business.website || evidence.website };
+    return { phone: evidence.phone, phoneSource: this.provider?.getProviderName(), phoneSourceUrl: evidence.phoneSourceUrl, phoneConfidence: evidence.confidence || 'CONFIRMED', phoneVerifiedAt: new Date().toISOString(), website: business.website || evidence.website, instagram: business.instagram || evidence.instagram, facebook: business.facebook || evidence.facebook, email: business.email || evidence.email };
   }
 }

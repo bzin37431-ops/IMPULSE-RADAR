@@ -599,7 +599,8 @@ export async function runSearch(search: ProspectSearch, store: MemoryStore) {
     const demo = providers.every((provider) =>
       provider.getProviderName().startsWith("MOCK"),
     );
-    const webProvider = providers.find((provider) => provider.getProviderName() === "WEB_SEARCH") as WebSearchProvider | undefined;
+    const webProvider = providers.find((provider) => ["WEB_SEARCH", "TAVILY_WEB_SEARCH"].includes(provider.getProviderName())) as WebSearchProvider | undefined;
+    const tavilyProvider = providers.find((provider) => provider.getProviderName() === "TAVILY_WEB_SEARCH") as WebSearchProvider | undefined;
     const enrichmentService = new ProspectEnrichmentService(webProvider);
     searchLog(search.id, "discovery_configuration", {
       geoapifyKeyLoaded: Boolean(env.GEOAPIFY_API_KEY),
@@ -667,7 +668,8 @@ export async function runSearch(search: ProspectSearch, store: MemoryStore) {
     const phoneFromGeoapify = initialDedupe.filter((item) => item.phoneSource === "GEOAPIFY" || Boolean(item.phone && !item.enrichmentAttempted)).length;
     const phoneEnrichmentAttempted = enrichmentResults.filter((result) => result.attempted).length;
     const phoneEnrichmentFound = enrichmentResults.filter((result) => result.foundPhone && result.attempted).length;
-    const diagnostics = { geoapifyKeyLoaded: Boolean(env.GEOAPIFY_API_KEY), providersSelected: providers.map((provider) => provider.getProviderName()), rawGeoapify, afterState: afterState.length, afterCity: afterCity.length, afterDistrict: afterDistrict.length, afterNicheBroad: nicheCandidates.length, enrichmentCandidates: initialDedupe.length, phoneFromGeoapify, phoneEnrichmentAttempted, phoneEnrichmentFound, afterPhone: afterPhone.length, afterDigitalStatus: afterDigitalStatus.length, afterMinScore: afterMinScore.length, afterDedupe: afterDedupe.length, finalCount: afterDedupe.length };
+    const tavilyRequests = tavilyProvider?.getRequestCount?.() || 0;
+    const diagnostics = { geoapifyKeyLoaded: Boolean(env.GEOAPIFY_API_KEY), providersSelected: providers.map((provider) => provider.getProviderName()), rawGeoapify, afterState: afterState.length, afterCity: afterCity.length, afterDistrict: afterDistrict.length, afterNicheBroad: nicheCandidates.length, enrichmentCandidates: initialDedupe.length, phoneFromGeoapify, phoneEnrichmentAttempted, phoneEnrichmentFound, tavilyRequests, afterPhone: afterPhone.length, afterDigitalStatus: afterDigitalStatus.length, afterMinScore: afterMinScore.length, afterDedupe: afterDedupe.length, finalCount: afterDedupe.length };
     search.diagnostics = diagnostics;
     searchLog(search.id, "search_stage_counts", diagnostics);
     searchLog(search.id, "rejection_aggregates", { NICHE_MISMATCH: afterDistrict.length - nicheCandidates.length, MISSING_PHONE: initialDedupe.length - afterPhone.length, WEBSITE_STATUS_MISMATCH: afterPhone.length - afterDigitalStatus.length, LOW_SCORE: afterDigitalStatus.length - afterMinScore.length, DUPLICATE: afterMinScore.length - afterDedupe.length });

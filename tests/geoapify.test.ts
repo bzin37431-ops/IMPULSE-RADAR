@@ -4,6 +4,7 @@ import { GeoapifyProvider, normalizeGeoapifyFeature } from "../src/providers/dis
 import { geoapifyCategories } from "../src/nicheRelevance.js";
 import { assessNicheRelevance } from "../src/nicheRelevance.js";
 import { ProspectEnrichmentService } from "../src/prospectEnrichmentService.js";
+import { TavilyWebSearchProvider } from "../src/providers/discovery/TavilyWebSearchProvider.js";
 
 const query = { state: "São Paulo", city: "Jacareí", niche: "Restaurante japonês", quantity: 20, coverageMode: "STRICT" } as const;
 
@@ -59,6 +60,44 @@ test("enrichment exige identidade compatível e guarda evidência do telefone", 
   assert.equal(result.foundPhone, true);
   assert.equal(result.business.phoneSource, "TEST_SEARCH");
   assert.equal(result.business.phoneSourceUrl, "https://example.test/sushi");
+});
+
+test("Tavily normaliza somente evidência compatível e nunca vira provider de descoberta", async () => {
+  const originalFetch = globalThis.fetch;
+  let requestBody: Record<string, unknown> | undefined;
+  globalThis.fetch = (async (_input, init) => {
+    requestBody = JSON.parse(String(init?.body));
+    return new Response(JSON.stringify({ results: [
+      { title: "Sakura Jacareí", url: "https://sakura.example/contato", content: "Sakura Jacareí - telefone (12) 3951-2040" },
+      { title: "Outra cidade", url: "https://other.example", content: "Sakura São José dos Campos telefone (12) 3333-4444" },
+    ] }), { status: 200, headers: { "content-type": "application/json" } });
+  }) as typeof fetch;
+  try {
+    const provider = new TavilyWebSearchProvider("test-key");
+    assert.deepEqual(await provider.searchBusinesses({ state: "São Paulo", city: "Jacareí", niche: "Restaurante", quantity: 5 }), []);
+    const evidence = await provider.search('"Sakura" "Jacareí" telefone', { name: "Sakura", city: "Jacareí", state: "São Paulo" });
+    assert.equal(evidence.length, 1);
+    assert.equal(evidence[0].phone, "+551239512040");
+    assert.equal(evidence[0].phoneSourceUrl, "https://sakura.example/contato");
+    assert.equal(requestBody?.api_key, "test-key");
+    assert.equal(requestBody?.max_results, 5);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Tavily trata rate limit sem quebrar o enrichment", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response("quota", { status: 429 })) as typeof fetch;
+  try {
+    const provider = new TavilyWebSearchProvider("test-key");
+    assert.deepEqual(await provider.search("empresa Jacareí telefone", { name: "Empresa", city: "Jacareí", state: "São Paulo" }), []);
+    assert.equal(provider.getStatus(), "RATE_LIMITED");
+    assert.deepEqual(await provider.search("segunda tentativa", { name: "Empresa", city: "Jacareí", state: "São Paulo" }), []);
+    assert.equal(provider.getRequestCount(), 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("provider real usa geocoding e Places sem depender de MockDiscoveryProvider", async () => {
