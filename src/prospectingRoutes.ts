@@ -18,7 +18,23 @@ const locationService = new LocationService();
 const isDemoSearch = (search: ProspectSearch) =>
   discoveryProviders(
     search.sourceMode as "PRINCIPAL" | "ALTERNATIVA" | "AMPLIADA",
-  ).every((provider) => provider.getProviderName().startsWith("MOCK"));
+    ).every((provider) => provider.getProviderName().startsWith("MOCK"));
+async function withTimeout<T>(promise: Promise<T>, milliseconds: number) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error("Tempo limite do provider excedido.")),
+          milliseconds,
+        );
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 function assertCan(request: FastifyRequest) {
   if (request.headers["x-user-role"] === "VIEWER")
     throw Object.assign(new Error("Permissão insuficiente."), {
@@ -564,19 +580,33 @@ export async function runSearch(search: ProspectSearch, store: MemoryStore) {
       provider.getProviderName().startsWith("MOCK"),
     );
     const raw = [];
+    const providerErrors: string[] = [];
     for (const provider of providers) {
       if (search.status === "CANCELLED") return;
       search.lastHeartbeatAt = new Date().toISOString();
-      raw.push(
-        ...(await provider.searchBusinesses({
-          state: search.state,
-          city: search.city,
-          district: search.district,
-          niche: search.niche,
-          quantity: search.quantity,
-          digitalStatus: search.digitalStatus,
-        })),
-      );
+      let providerResults: Awaited<ReturnType<typeof provider.searchBusinesses>> = [];
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          providerResults = await withTimeout(
+            provider.searchBusinesses({
+              state: search.state,
+              city: search.city,
+              district: search.district,
+              niche: search.niche,
+              quantity: search.quantity,
+              digitalStatus: search.digitalStatus,
+            }),
+            10000,
+          );
+          break;
+        } catch (error) {
+          if (attempt === 1)
+            providerErrors.push(
+              `${provider.getProviderName()}: ${error instanceof Error ? error.message : "falha desconhecida"}`,
+            );
+        }
+      }
+      raw.push(...providerResults);
       search.progress = Math.min(
         80,
         Math.round(
@@ -631,7 +661,9 @@ export async function runSearch(search: ProspectSearch, store: MemoryStore) {
               (normalized.length / Math.max(1, search.quantity)) * 100,
             ),
           );
-    search.status = "COMPLETED";
+    if (providerErrors.length)
+      search.errorMessage = `Resultados parciais: ${providerErrors.join("; ")}`;
+    search.status = normalized.length || !providerErrors.length ? "COMPLETED" : "FAILED";
     search.completedAt = new Date().toISOString();
     search.resultsCount = normalized.length;
     search.uniqueResults = normalized.length;
