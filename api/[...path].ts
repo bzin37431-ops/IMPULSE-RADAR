@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { env, assertOfficialProvider } from '../src/config.js';
+import { env, databaseUrl, assertOfficialProvider } from '../src/config.js';
 import { buildApp } from '../src/app.js';
 import { PrismaPersistence } from '../src/persistence.js';
 import { MemoryStore } from '../src/store.js';
@@ -10,7 +10,7 @@ type VercelResponse = ServerResponse;
 async function createApp() {
   assertOfficialProvider();
 
-  const persistence = env.DATABASE_URL ? new PrismaPersistence() : undefined;
+  const persistence = databaseUrl ? new PrismaPersistence() : undefined;
   const store = new MemoryStore(env.TEST_MODE, persistence);
 
   if (persistence) {
