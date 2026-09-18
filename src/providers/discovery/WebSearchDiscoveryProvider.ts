@@ -1,7 +1,7 @@
 import { env } from '../../config.js';
 import { DiscoveryBusiness, DiscoveryProvider, DiscoveryQuery } from './DiscoveryProvider.js';
 
-export type WebSearchEvidence = { name: string; city: string; state: string; district?: string; address?: string; website?: string; instagram?: string; facebook?: string; email?: string; phone?: string; phoneSourceUrl?: string; confidence?: string };
+export type WebSearchEvidence = { name: string; city: string; state: string; district?: string; address?: string; website?: string; instagram?: string; facebook?: string; email?: string; emailSource?: string; phone?: string; phoneSourceId?: string; phoneSourceUrl?: string; confidence?: string; matchConfidence?: string; externalIds?: Record<string, string> };
 export type WebSearchContext = { name: string; city: string; state: string; district?: string; address?: string };
 export interface WebSearchProvider {
   getProviderName(): string;

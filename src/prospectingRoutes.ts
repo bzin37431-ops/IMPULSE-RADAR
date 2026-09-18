@@ -16,6 +16,9 @@ import { assessNicheRelevance } from "./nicheRelevance.js";
 import { env } from "./config.js";
 import { ProspectEnrichmentService } from "./prospectEnrichmentService.js";
 import { WebSearchProvider } from "./providers/discovery/WebSearchDiscoveryProvider.js";
+import { ReceitaCnpjEnrichmentProvider } from "./providers/enrichment/ReceitaCnpjEnrichmentProvider.js";
+import { CnpjWsProvider } from "./providers/enrichment/CnpjWsProvider.js";
+import { OsmContactEnrichmentProvider } from "./providers/enrichment/OsmContactEnrichmentProvider.js";
 
 const ibgeLocationProvider = new IBGELocationProvider();
 const districtProvider = new DistrictProvider();
@@ -65,11 +68,13 @@ function toBusiness(
     category: item.category,
     phone: item.phone,
     phoneSource: item.phoneSource,
+    phoneSourceId: item.phoneSourceId,
     phoneSourceUrl: item.phoneSourceUrl,
     phoneVerifiedAt: item.phoneVerifiedAt,
     normalizedPhone: item.normalizedPhone,
     whatsapp: item.whatsapp,
     email: item.email,
+    emailSource: item.emailSource,
     instagram: item.instagram,
     facebook: item.facebook,
     tiktok: item.tiktok,
@@ -601,7 +606,10 @@ export async function runSearch(search: ProspectSearch, store: MemoryStore) {
     );
     const webProvider = providers.find((provider) => ["WEB_SEARCH", "TAVILY_WEB_SEARCH"].includes(provider.getProviderName())) as WebSearchProvider | undefined;
     const tavilyProvider = providers.find((provider) => provider.getProviderName() === "TAVILY_WEB_SEARCH") as WebSearchProvider | undefined;
-    const enrichmentService = new ProspectEnrichmentService(webProvider);
+    const receitaProvider = new ReceitaCnpjEnrichmentProvider();
+    const osmProvider = new OsmContactEnrichmentProvider();
+    const cnpjWsProvider = new CnpjWsProvider();
+    const enrichmentService = new ProspectEnrichmentService([receitaProvider, osmProvider, cnpjWsProvider, ...(webProvider ? [webProvider] : [])]);
     searchLog(search.id, "discovery_configuration", {
       geoapifyKeyLoaded: Boolean(env.GEOAPIFY_API_KEY),
       providersSelected: providers.map((provider) => provider.getProviderName()),
@@ -668,8 +676,15 @@ export async function runSearch(search: ProspectSearch, store: MemoryStore) {
     const phoneFromGeoapify = initialDedupe.filter((item) => item.phoneSource === "GEOAPIFY" || Boolean(item.phone && !item.enrichmentAttempted)).length;
     const phoneEnrichmentAttempted = enrichmentResults.filter((result) => result.attempted).length;
     const phoneEnrichmentFound = enrichmentResults.filter((result) => result.foundPhone && result.attempted).length;
+    const receitaMatchesAttempted = enrichmentResults.filter((result) => result.attemptedProviders.includes("RECEITA_CNPJ")).length;
+    const receitaMatchesFound = enrichmentResults.filter((result) => result.matchedProviders.includes("RECEITA_CNPJ")).length;
+    const phoneFromReceita = enrichmentResults.filter((result) => result.source === "RECEITA_CNPJ").length;
+    const phoneFromOsm = enrichmentResults.filter((result) => result.source === "OSM_CONTACT").length;
+    const cnpjWsRequests = cnpjWsProvider.getRequestCount();
+    const phoneFromCnpjWs = enrichmentResults.filter((result) => result.source === "CNPJ_WS").length;
+    const tavilyCandidates = enrichmentResults.filter((result) => result.attemptedProviders.includes("TAVILY_WEB_SEARCH")).length;
     const tavilyRequests = tavilyProvider?.getRequestCount?.() || 0;
-    const diagnostics = { geoapifyKeyLoaded: Boolean(env.GEOAPIFY_API_KEY), providersSelected: providers.map((provider) => provider.getProviderName()), rawGeoapify, afterState: afterState.length, afterCity: afterCity.length, afterDistrict: afterDistrict.length, afterNicheBroad: nicheCandidates.length, enrichmentCandidates: initialDedupe.length, phoneFromGeoapify, phoneEnrichmentAttempted, phoneEnrichmentFound, tavilyRequests, afterPhone: afterPhone.length, afterDigitalStatus: afterDigitalStatus.length, afterMinScore: afterMinScore.length, afterDedupe: afterDedupe.length, finalCount: afterDedupe.length };
+    const diagnostics = { geoapifyKeyLoaded: Boolean(env.GEOAPIFY_API_KEY), providersSelected: providers.map((provider) => provider.getProviderName()), rawGeoapify, afterState: afterState.length, afterCity: afterCity.length, afterDistrict: afterDistrict.length, afterNicheBroad: nicheCandidates.length, enrichmentCandidates: initialDedupe.length, phoneFromGeoapify, phoneEnrichmentAttempted, phoneEnrichmentFound, receitaMatchesAttempted, receitaMatchesFound, phoneFromReceita, phoneFromOsm, cnpjWsRequests, phoneFromCnpjWs, tavilyCandidates, tavilyRequests, phoneFromTavily: enrichmentResults.filter((result) => result.source === "TAVILY_WEB_SEARCH").length, afterPhone: afterPhone.length, afterDigitalStatus: afterDigitalStatus.length, afterMinScore: afterMinScore.length, afterDedupe: afterDedupe.length, finalCount: afterDedupe.length };
     search.diagnostics = diagnostics;
     searchLog(search.id, "search_stage_counts", diagnostics);
     searchLog(search.id, "rejection_aggregates", { NICHE_MISMATCH: afterDistrict.length - nicheCandidates.length, MISSING_PHONE: initialDedupe.length - afterPhone.length, WEBSITE_STATUS_MISMATCH: afterPhone.length - afterDigitalStatus.length, LOW_SCORE: afterDigitalStatus.length - afterMinScore.length, DUPLICATE: afterMinScore.length - afterDedupe.length });

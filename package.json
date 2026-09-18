@@ -12,6 +12,7 @@
     "test": "tsx --test tests/**/*.test.ts",
     "db:migrate": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
+    "db:import-cnpj": "tsx src/receitaCnpjImportCli.ts",
     "lint": "eslint . --ext .ts,.tsx"
   },
   "dependencies": {

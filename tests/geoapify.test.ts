@@ -5,6 +5,7 @@ import { geoapifyCategories } from "../src/nicheRelevance.js";
 import { assessNicheRelevance } from "../src/nicheRelevance.js";
 import { ProspectEnrichmentService } from "../src/prospectEnrichmentService.js";
 import { TavilyWebSearchProvider } from "../src/providers/discovery/TavilyWebSearchProvider.js";
+import { evaluateReceitaMatch } from "../src/providers/enrichment/ReceitaCnpjEnrichmentProvider.js";
 
 const query = { state: "São Paulo", city: "Jacareí", niche: "Restaurante japonês", quantity: 20, coverageMode: "STRICT" } as const;
 
@@ -98,6 +99,16 @@ test("Tavily trata rate limit sem quebrar o enrichment", async () => {
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("matching Receita distingue nome, cidade, bairro, CEP e endereço", () => {
+  const business = { name: "Sakura Restaurante", city: "Jacareí", state: "São Paulo", district: "Centro", address: "Rua A, 10", postalCode: "12345-000" };
+  const exact = evaluateReceitaMatch(business, { cnpj: "1", businessName: "Sakura Restaurante LTDA", tradeName: "Sakura Restaurante", district: "Centro", postalCode: "12345-000", street: "Rua A" });
+  assert.equal(exact.matchConfidence, "EXACT");
+  const approximate = evaluateReceitaMatch(business, { cnpj: "2", businessName: "Sakura Restaurante LTDA", tradeName: "Sakura Restaurante Jacareí", district: "Centro", postalCode: null, street: "Rua B" });
+  assert.ok(["EXACT", "HIGH", "MEDIUM"].includes(approximate.matchConfidence));
+  const divergentPostal = evaluateReceitaMatch(business, { cnpj: "3", businessName: "Sakura Restaurante", tradeName: "Sakura Restaurante", district: "Centro", postalCode: "99999-000", street: "Rua B" });
+  assert.equal(divergentPostal.matchConfidence, "LOW");
 });
 
 test("provider real usa geocoding e Places sem depender de MockDiscoveryProvider", async () => {

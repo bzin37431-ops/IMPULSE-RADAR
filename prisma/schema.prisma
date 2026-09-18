@@ -357,11 +357,13 @@ model ProspectBusiness {
   category                String?
   phone                   String?
   phoneSource             String?
+  phoneSourceId           String?
   phoneSourceUrl          String?
   phoneVerifiedAt         DateTime?
   normalizedPhone         String?
   whatsapp                String?
   email                   String?
+  emailSource             String?
   instagram               String?
   facebook                String?
   tiktok                  String?
@@ -426,4 +428,30 @@ model ProviderResult {
   search     ProspectingSearch @relation(fields: [searchId], references: [id], onDelete: Cascade)
 
   @@index([searchId, provider])
+}
+
+model CnpjEstablishmentIndex {
+  cnpj                   String   @id
+  businessName           String
+  normalizedBusinessName String
+  tradeName              String?
+  normalizedTradeName    String?
+  status                 String
+  cnae                   String?
+  street                 String?
+  number                 String?
+  district               String?
+  city                   String
+  state                  String
+  postalCode             String?
+  phone1                 String?
+  phone2                 String?
+  email                  String?
+  updatedAt              DateTime @updatedAt
+
+  @@index([normalizedTradeName])
+  @@index([normalizedBusinessName])
+  @@index([city, state])
+  @@index([postalCode])
+  @@index([cnae])
 }

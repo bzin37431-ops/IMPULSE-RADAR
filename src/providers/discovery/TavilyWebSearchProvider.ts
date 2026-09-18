@@ -22,6 +22,15 @@ export class TavilyWebSearchProvider implements DiscoveryProvider, WebSearchProv
   getRequestCount() { return this.requestCount; }
   getStatus() { return this.status; }
   async searchBusinesses(_query: DiscoveryQuery): Promise<DiscoveryBusiness[]> { return []; }
+  async enrich(business: DiscoveryBusiness, _query: DiscoveryQuery): Promise<WebSearchEvidence[]> {
+    const context = { name: business.name, city: business.city, state: business.state, district: business.district, address: business.address };
+    const evidence: WebSearchEvidence[] = [];
+    for (const term of ['telefone', 'contato', 'Instagram', 'site']) {
+      evidence.push(...await this.search([business.name, business.city, business.district, business.address].filter(Boolean).map((item) => `"${item}"`).join(' ') + ` ${term}`, context));
+      if (evidence.some((item) => item.phone)) break;
+    }
+    return evidence;
+  }
 
   async search(query: string, context?: WebSearchContext): Promise<WebSearchEvidence[]> {
     if (!this.configuredKey || this.status === 'QUOTA_EXHAUSTED' || this.status === 'RATE_LIMITED') return [];

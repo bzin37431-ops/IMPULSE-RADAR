@@ -4,11 +4,13 @@ export type DiscoveryBusiness = {
   category?: string;
   phone?: string;
   phoneSource?: string;
+  phoneSourceId?: string;
   phoneSourceUrl?: string;
   phoneConfidence?: string;
   phoneVerifiedAt?: string;
   whatsapp?: string;
   email?: string;
+  emailSource?: string;
   instagram?: string;
   facebook?: string;
   tiktok?: string;
