@@ -1496,7 +1496,7 @@ function Login({ onLogin }: { onLogin: () => void }) {
   return (
     <div className="login">
       <form onSubmit={submit}>
-        <span className="eyebrow">IMPULSE CONNECT</span>
+        <span className="eyebrow">IMPULSE RADAR</span>
         <h2>Entrar na operação</h2>
         <label>
           E-mail
