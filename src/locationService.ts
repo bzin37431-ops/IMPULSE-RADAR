@@ -6,3 +6,12 @@ export class LocationService { async states(){const key='states';const hit=cache
  async cities(uf:string){const key=`cities:${uf}`;const hit=cache.get(key);if(hit&&hit.expiresAt>Date.now())return hit.value;try{const rows=await fetchJson<Array<{nome:string}>>(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${encodeURIComponent(uf)}/municipios`);const result=sorted(rows.map((item)=>item.nome));cache.set(key,{value:result,expiresAt:Date.now()+86400000});return result}catch{return []}}
  async districts(city:string,state:string){const key=`districts:${state}:${city}`;const hit=cache.get(key);if(hit&&hit.expiresAt>Date.now())return hit.value;try{const query=new URLSearchParams({q:`neighbourhoods in ${city}, ${state}, Brazil`,format:'jsonv2',limit:'100',addressdetails:'1'});const rows=await fetchJson<Array<{display_name:string;type?:string;class?:string}>>(`https://nominatim.openstreetmap.org/search?${query}`);const result=sorted(rows.filter((item)=>['neighbourhood','suburb','quarter','district'].includes(item.type||'')||item.class==='place').map((item)=>item.display_name.split(',')[0]));cache.set(key,{value:result,expiresAt:Date.now()+86400000});return result}catch{return []}}
 }
+export class IBGELocationProvider {
+  private readonly service = new LocationService();
+  states() { return this.service.states(); }
+  cities(uf: string) { return this.service.cities(uf); }
+}
+export class DistrictProvider {
+  private readonly service = new LocationService();
+  districts(city: string, state: string) { return this.service.districts(city, state); }
+}

@@ -10,11 +10,12 @@ import {
 import { discoveryProviders } from "./providers/discovery/index.js";
 import { deduplicateBusinesses, normalizeBusiness } from "./prospecting.js";
 import { ProspectingQueue } from "./prospectingQueue.js";
-import { LocationService } from "./locationService.js";
+import { DistrictProvider, IBGELocationProvider } from "./locationService.js";
 import { BUSINESS_NICHES } from "./data/businessNiches.js";
 import { isNicheRelevant } from "./nicheRelevance.js";
 
-const locationService = new LocationService();
+const ibgeLocationProvider = new IBGELocationProvider();
+const districtProvider = new DistrictProvider();
 const isDemoSearch = (search: ProspectSearch) =>
   discoveryProviders(
     search.sourceMode as "PRINCIPAL" | "ALTERNATIVA" | "AMPLIADA",
@@ -98,8 +99,8 @@ export function registerProspectingRoutes(
   app.get("/api/prospecting/localities", async (request) => {
     const uf = (request.query as { state?: string }).state;
     return {
-      states: await locationService.states(),
-      cities: uf ? await locationService.cities(uf) : [],
+      states: await ibgeLocationProvider.states(),
+      cities: uf ? await ibgeLocationProvider.cities(uf) : [],
       districts: [],
     };
   });
@@ -109,7 +110,7 @@ export function registerProspectingRoutes(
     return {
       data: [
         "Toda a cidade",
-        ...(await locationService.districts(query.city, query.state)),
+        ...(await districtProvider.districts(query.city, query.state)),
       ],
     };
   });
